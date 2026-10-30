@@ -35,3 +35,7 @@ config :phoenix, :plug_init_mode, :runtime
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+config :godswheel, :jwt_secret, "godswheel-test-jwt-secret-not-for-production"
+config :godswheel, :frontend_url, "http://localhost:3000"
+config :godswheel, :from_email, {"Godswheel Test", "no-reply@godswheel.test"}

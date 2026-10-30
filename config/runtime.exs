@@ -16,6 +16,51 @@ import Config
 #
 # Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
 # script that automatically sets the env var above.
+
+config :godswheel, :frontend_url, System.get_env("FRONTEND_URL", "http://localhost:3000")
+
+config :godswheel, :from_email,
+  {System.get_env("FROM_NAME", "Godswheel"), System.get_env("FROM_EMAIL", "no-reply@godswheel.app")}
+
+if config_env() == :prod do
+  dashboard_username =
+    System.get_env("DASHBOARD_USERNAME") ||
+      raise "environment variable DASHBOARD_USERNAME is missing"
+
+  dashboard_password =
+    System.get_env("DASHBOARD_PASSWORD") ||
+      raise "environment variable DASHBOARD_PASSWORD is missing"
+
+  if byte_size(dashboard_password) < 32 do
+    raise "DASHBOARD_PASSWORD must contain at least 32 bytes"
+  end
+
+  config :godswheel, :dashboard_auth,
+    username: dashboard_username,
+    password: dashboard_password
+
+  jwt_secret =
+    System.get_env("JWT_SECRET") ||
+      raise "environment variable JWT_SECRET is missing. Generate one with: mix phx.gen.secret"
+
+  if byte_size(jwt_secret) < 32 do
+    raise "JWT_SECRET must contain at least 32 bytes"
+  end
+
+  config :godswheel, :jwt_secret, jwt_secret
+
+  # Production email uses Resend. Development and test keep their local/test adapters.
+  resend_api_key =
+    System.get_env("RESEND_API_KEY") ||
+      raise "environment variable RESEND_API_KEY is missing for production password-reset emails"
+
+  config :godswheel, GodsWheel.Mailer,
+    adapter: Swoosh.Adapters.Resend,
+    api_key: resend_api_key
+
+  config :swoosh, :api_client, Swoosh.ApiClient.Req
+end
+
 if System.get_env("PHX_SERVER") do
   config :godswheel, GodsWheelWeb.Endpoint, server: true
 end

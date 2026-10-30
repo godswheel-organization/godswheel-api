@@ -15,4 +15,4 @@ Ready to run in production? Please [check our deployment guides](https://hexdocs
 * Guides: https://hexdocs.pm/phoenix/overview.html
 * Docs: https://hexdocs.pm/phoenix
 * Forum: https://elixirforum.com/c/phoenix-forum
-* Source: https://github.com/phoenixframework/phoenix
+* Source: https://github.com/phoenixframework/phoenix 

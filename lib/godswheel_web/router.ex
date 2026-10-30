@@ -5,24 +5,62 @@ defmodule GodsWheelWeb.Router do
     plug :accepts, ["json"]
   end
 
-  scope "/api", GodsWheelWeb do
-    pipe_through :api
+  pipeline :authenticated_api do
+    plug GodsWheelWeb.Plugs.Authenticate
   end
 
-  # Enable LiveDashboard and Swoosh mailbox preview in development
-  if Application.compile_env(:godswheel, :dev_routes) do
-    # If you want to use the LiveDashboard in production, you should put
-    # it behind authentication and allow only admins to access it.
-    # If your application does not have an admins-only section yet,
-    # you can use Plug.BasicAuth to set up some basic authentication
-    # as long as you are also using SSL (which you should anyway).
-    import Phoenix.LiveDashboard.Router
+  pipeline :dashboard do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :protect_from_forgery
+    plug GodsWheelWeb.Plugs.DashboardAuth
+  end
 
+  pipeline :fallback do
+    plug :accepts, ["html"]
+  end
+
+  scope "/api/v1", GodsWheelWeb do
+    pipe_through :api
+
+    get "/health", HealthController, :show
+    post "/auth/signup", AuthController, :signup
+    post "/auth/login", AuthController, :login
+    post "/auth/verify-email", AuthController, :verify_email
+    post "/auth/resend-verification", AuthController, :resend_verification
+    post "/auth/forgot-password", PasswordResetController, :request
+    post "/auth/reset-password", PasswordResetController, :reset
+  end
+
+  scope "/api/v1", GodsWheelWeb do
+    pipe_through [:api, :authenticated_api]
+
+    get "/auth/me", AuthController, :me
+  end
+
+  get "/api/v1/openapi.json", GodsWheelWeb.OpenApiController, :spec
+  get "/swagger", GodsWheelWeb.OpenApiController, :swagger_ui
+
+  import Phoenix.LiveDashboard.Router
+
+  scope "/admin" do
+    pipe_through :dashboard
+
+    live_dashboard "/dashboard", metrics: GodsWheelWeb.Telemetry
+  end
+
+  if Application.compile_env(:godswheel, :dev_routes) do
     scope "/dev" do
       pipe_through [:fetch_session, :protect_from_forgery]
 
-      live_dashboard "/dashboard", metrics: GodsWheelWeb.Telemetry
       forward "/mailbox", Plug.Swoosh.MailboxPreview
     end
+  end
+
+  scope "/", GodsWheelWeb do
+    pipe_through :fallback
+
+    match :*, "/", OpenApiController, :swagger_ui
+    match :*, "/*path", OpenApiController, :swagger_ui
   end
 end
