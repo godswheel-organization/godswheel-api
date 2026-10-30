@@ -3,7 +3,7 @@ defmodule GodsWheelWeb.Endpoint do
 
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
-  # Set :encryption_salt if you would also like to encrypt it.
+  # Set :encryption_salt if you would like to encrypt it.
   @session_options [
     store: :cookie,
     key: "_godswheel_key",
