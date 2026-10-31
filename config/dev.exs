@@ -62,9 +62,6 @@ config :phoenix, :stacktrace_depth, 20
 # Initialize plugs at runtime for faster development compilation
 config :phoenix, :plug_init_mode, :runtime
 
-# Disable swoosh api client as it is only required for production adapters.
-config :swoosh, :api_client, false
-
 # Local-only signing secret for JWT access tokens. Override through runtime
 # configuration if you share this development environment.
 config :godswheel, :jwt_secret, "godswheel-development-jwt-secret-change-before-deployment"

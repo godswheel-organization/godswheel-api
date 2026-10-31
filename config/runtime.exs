@@ -17,8 +17,6 @@ import Config
 # Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
 # script that automatically sets the env var above.
 
-config :swoosh, :api_client, Swoosh.ApiClient.Req
-
 config :godswheel, :frontend_url, System.get_env("FRONTEND_URL", "http://localhost:3000")
 
 if config_env() in [:prod, :staging] do
@@ -63,7 +61,17 @@ if config_env() in [:prod, :staging] do
     password: smtp_password,
     port: 587,
     tls: :always,
-    auth: :always
+    auth: :always,
+    tls_options: [
+      versions: [:"tlsv1.2", :"tlsv1.3"],
+      verify: :verify_peer,
+      cacerts: :public_key.cacerts_get(),
+      server_name_indication: ~c"smtp.gmail.com",
+      depth: 99,
+      customize_hostname_check: [
+        match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+      ]
+    ]
 
   database_url =
     System.get_env("DATABASE_URL") ||
