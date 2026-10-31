@@ -25,3 +25,4 @@ jobs:
           GIGALIXIR_APP: godswheel
           MIGRATIONS: true
           SSH_PRIVATE_KEY: ${{ secrets.GIGALIXIR_SSH_PRIVATE_KEY }}
+# check version
