@@ -19,10 +19,7 @@ import Config
 
 config :godswheel, :frontend_url, System.get_env("FRONTEND_URL", "http://localhost:3000")
 
-config :godswheel, :from_email,
-  {System.get_env("FROM_NAME", "Godswheel"), System.get_env("FROM_EMAIL", "no-reply@godswheel.app")}
-
-if config_env() == :prod do
+if config_env() in [:prod, :staging] do
   dashboard_username =
     System.get_env("DASHBOARD_USERNAME") ||
       raise "environment variable DASHBOARD_USERNAME is missing"
@@ -49,16 +46,22 @@ if config_env() == :prod do
 
   config :godswheel, :jwt_secret, jwt_secret
 
-  # Production email uses Resend. Development and test keep their local/test adapters.
-  resend_api_key =
-    System.get_env("RESEND_API_KEY") ||
-      raise "environment variable RESEND_API_KEY is missing for production password-reset emails"
+  smtp_username =
+    System.get_env("SMTP_USERNAME") ||
+      raise "environment variable SMTP_USERNAME is missing"
+
+  smtp_password =
+    System.get_env("SMTP_PASSWORD") ||
+      raise "environment variable SMTP_PASSWORD is missing"
 
   config :godswheel, GodsWheel.Mailer,
-    adapter: Swoosh.Adapters.Resend,
-    api_key: resend_api_key
-
-  config :swoosh, :api_client, Swoosh.ApiClient.Req
+    adapter: Swoosh.Adapters.SMTP,
+    relay: "smtp.gmail.com",
+    username: smtp_username,
+    password: smtp_password,
+    port: 587,
+    tls: :always,
+    auth: :always
 end
 
 if System.get_env("PHX_SERVER") do

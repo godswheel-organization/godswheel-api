@@ -7,7 +7,7 @@ defmodule GodsWheel.MixProject do
       version: "0.1.0",
       elixir: "~> 1.15",
       elixirc_paths: elixirc_paths(Mix.env()),
-      start_permanent: Mix.env() == :prod,
+      start_permanent: Mix.env() in [:prod, :staging],
       aliases: aliases(),
       deps: deps(),
       listeners: [Phoenix.CodeReloader]
@@ -45,6 +45,7 @@ defmodule GodsWheel.MixProject do
       {:postgrex, ">= 0.0.0"},
       {:phoenix_live_dashboard, "~> 0.8.3"},
       {:swoosh, "~> 1.16"},
+      {:gen_smtp, "~> 1.2"},
       {:bcrypt_elixir, "~> 3.2"},
       {:req, "~> 0.5"},
       {:telemetry_metrics, "~> 1.0"},
