@@ -18,17 +18,10 @@ jobs:
           fetch-depth: 0
 
       - name: Deploy to Gigalixir
-        uses: gigalixir/gigalixir-action@v1
+        uses: gigalixir/gigalixir-action@v0
         with:
-          gigalixir_email: ${{ secrets.GIGALIXIR_EMAIL }}
-          gigalixir_api_key: ${{ secrets.GIGALIXIR_API_KEY }}
-          app_name: godswheel
-
-      # - name: Deploy to Gigalixir
-      #   uses: gigalixir/gigalixir-action@v0
-      #   with:
-      #     GIGALIXIR_USERNAME: ${{ secrets.GIGALIXIR_EMAIL }}
-      #     GIGALIXIR_PASSWORD: ${{ secrets.GIGALIXIR_API_KEY }}
-      #     GIGALIXIR_APP: godswheel
-      #     MIGRATIONS: true
-      #     SSH_PRIVATE_KEY: ${{ secrets.GIGALIXIR_SSH_PRIVATE_KEY }}
+          GIGALIXIR_USERNAME: ${{ secrets.GIGALIXIR_EMAIL }}
+          GIGALIXIR_PASSWORD: ${{ secrets.GIGALIXIR_API_KEY }}
+          GIGALIXIR_APP: godswheel
+          MIGRATIONS: true
+          SSH_PRIVATE_KEY: ${{ secrets.GIGALIXIR_SSH_PRIVATE_KEY }}
