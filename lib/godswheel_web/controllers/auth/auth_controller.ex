@@ -46,14 +46,14 @@ defmodule GodsWheelWeb.AuthController do
       {:error, :invalid_credentials} ->
         conn
         |> put_status(:unauthorized)
-        |> json(%{error: %{message: "Invalid email/username or password"}})
+        |> json(%{error: %{message: "Invalid email or password"}})
     end
   end
 
   def login(conn, _params) do
     conn
     |> put_status(:unprocessable_entity)
-    |> json(%{error: %{message: "identifier and password are required"}})
+    |> json(%{error: %{message: "identifier (email) and password are required"}})
   end
 
   def verify_email(conn, %{"token" => token}) do
@@ -105,7 +105,6 @@ defmodule GodsWheelWeb.AuthController do
       id: user.id,
       full_name: user.full_name,
       email: user.email,
-      username: user.username,
       email_verified: not is_nil(user.email_verified_at)
     }
   end

@@ -47,16 +47,14 @@ defmodule GodsWheel.Accounts do
     end
   end
 
-  def authenticate(identifier, password)
-      when is_binary(identifier) and is_binary(password) do
-    normalized_identifier = identifier |> String.trim() |> String.downcase()
+  def authenticate(email, password)
+      when is_binary(email) and is_binary(password) do
+    normalized_email = email |> String.trim() |> String.downcase()
 
     user =
       Repo.one(
         from user in User,
-          where:
-            user.email == ^normalized_identifier or
-              user.username == ^normalized_identifier
+          where: user.email == ^normalized_email
       )
 
     if user && Bcrypt.verify_pass(password, user.password_hash) do

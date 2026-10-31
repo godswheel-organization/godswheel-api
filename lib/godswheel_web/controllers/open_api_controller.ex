@@ -75,7 +75,7 @@ defmodule GodsWheelWeb.OpenApiController do
           post: operation(
             "Authentication",
             "Log in",
-            "Authenticates with an email address or username. Unverified accounts cannot log in.",
+            "Authenticates with an email address. Unverified accounts cannot log in.",
             "LoginRequest",
             %{
               "200" => response("Authenticated.", "SessionResponse"),
@@ -164,10 +164,9 @@ defmodule GodsWheelWeb.OpenApiController do
             %{
               full_name: string_schema("User's full name", minLength: 2, maxLength: 120),
               email: string_schema("Email address", format: "email", maxLength: 254),
-              username: string_schema("Username; lowercase letters, numbers, and underscores", minLength: 3, maxLength: 30, pattern: "^[a-z0-9_]+$"),
-              password: string_schema("Password; 8 to 72 characters", minLength: 8, maxLength: 72)
+                            password: string_schema("Password; 8 to 72 characters", minLength: 8, maxLength: 72)
             },
-            ["full_name", "email", "username", "password"]
+            ["full_name", "email", "password"]
           ),
           SignupResponse: object_schema(%{
             data: object_schema(%{
@@ -176,7 +175,7 @@ defmodule GodsWheelWeb.OpenApiController do
             }, ["message", "user"])
           }, ["data"]),
           LoginRequest: object_schema(%{
-            identifier: string_schema("Email address or username"),
+            identifier: string_schema("Email address", format: "email"),
             password: string_schema("Account password")
           }, ["identifier", "password"]),
           EmailRequest: object_schema(%{
@@ -204,9 +203,8 @@ defmodule GodsWheelWeb.OpenApiController do
             id: %{type: "string", format: "uuid"},
             full_name: string_schema("User's full name"),
             email: string_schema("Email address", format: "email"),
-            username: string_schema("Username"),
             email_verified: %{type: "boolean"}
-          }, ["id", "full_name", "email", "username", "email_verified"]),
+          }, ["id", "full_name", "email", "email_verified"]),
           MessageResponse: object_schema(%{
             data: object_schema(%{
               message: string_schema("Human-readable result message")

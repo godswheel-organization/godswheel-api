@@ -5,7 +5,6 @@ defmodule GodsWheelWeb.AuthJSON do
         id: user.id,
         full_name: user.full_name,
         email: user.email,
-        username: user.username,
         email_verified: not is_nil(user.email_verified_at)
       }
     }
@@ -18,8 +17,7 @@ defmodule GodsWheelWeb.AuthJSON do
           id: user.id,
           full_name: user.full_name,
           email: user.email,
-          username: user.username,
-          email_verified: not is_nil(user.email_verified_at)
+            email_verified: not is_nil(user.email_verified_at)
         },
         access_token: token,
         token_type: "Bearer",

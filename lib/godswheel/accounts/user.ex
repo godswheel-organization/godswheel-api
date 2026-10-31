@@ -8,7 +8,6 @@ defmodule GodsWheel.Accounts.User do
   schema "users" do
     field :full_name, :string
     field :email, :string
-    field :username, :string
     field :password, :string, virtual: true, redact: true
     field :password_hash, :string, redact: true
     field :email_verified_at, :utc_datetime_usec
@@ -18,22 +17,16 @@ defmodule GodsWheel.Accounts.User do
 
   def registration_changeset(user, attrs) do
     user
-    |> cast(attrs, [:full_name, :email, :username, :password])
+    |> cast(attrs, [:full_name, :email, :password])
     |> update_change(:full_name, &String.trim/1)
     |> update_change(:email, &(&1 |> String.trim() |> String.downcase()))
-    |> update_change(:username, &(&1 |> String.trim() |> String.downcase()))
-    |> validate_required([:full_name, :email, :username, :password])
+    |> validate_required([:full_name, :email, :password])
     |> validate_length(:full_name, min: 2, max: 120)
     |> validate_length(:email, max: 254)
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+\.[^\s]+$/)
-    |> validate_length(:username, min: 3, max: 30)
-    |> validate_format(:username, ~r/^[a-z0-9_]+$/,
-      message: "may contain only lowercase letters, numbers, and underscores"
-    )
     |> validate_length(:password, min: 8, max: 72)
     |> validate_password_byte_length()
     |> unique_constraint(:email)
-    |> unique_constraint(:username)
     |> put_password_hash()
   end
 

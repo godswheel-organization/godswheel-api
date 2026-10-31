@@ -13,13 +13,11 @@ defmodule GodsWheelWeb.AuthControllerTest do
         |> post("/api/auth/signup", %{
           "full_name" => "Nature Okoye",
           "email" => "Nature@example.com",
-          "username" => "Nature_Dev",
           "password" => "a-strong-password"
         })
         |> json_response(:created)
 
       assert response["data"]["user"]["email"] == "nature@example.com"
-      assert response["data"]["user"]["username"] == "nature_dev"
       assert response["data"]["user"]["email_verified"] == false
       refute Map.has_key?(response["data"], "access_token")
 
@@ -35,7 +33,6 @@ defmodule GodsWheelWeb.AuthControllerTest do
         |> json_response(:unprocessable_entity)
 
       assert response["errors"]["full_name"]
-      assert response["errors"]["username"]
       assert response["errors"]["password"]
     end
   end
@@ -46,7 +43,6 @@ defmodule GodsWheelWeb.AuthControllerTest do
         Accounts.register_user(%{
           full_name: "Test User",
           email: "test@example.com",
-          username: "test_user",
           password: "a-strong-password"
         })
 
@@ -71,16 +67,16 @@ defmodule GodsWheelWeb.AuthControllerTest do
       assert response["data"]["access_token"]
     end
 
-    test "authenticates with username", %{conn: conn} do
+    test "does not authenticate with a username", %{conn: conn} do
       response =
         conn
         |> post("/api/auth/login", %{
-          "identifier" => "TEST_USER",
+          "identifier" => "test_user",
           "password" => "a-strong-password"
         })
-        |> json_response(:ok)
+        |> json_response(:unauthorized)
 
-      assert response["data"]["user"]["username"] == "test_user"
+      assert response["error"]["message"] == "Invalid email or password"
     end
 
     test "returns a generic error for invalid credentials", %{conn: conn} do
@@ -92,7 +88,7 @@ defmodule GodsWheelWeb.AuthControllerTest do
         })
         |> json_response(:unauthorized)
 
-      assert response["error"]["message"] == "Invalid email/username or password"
+      assert response["error"]["message"] == "Invalid email or password"
     end
   end
 
@@ -102,7 +98,6 @@ defmodule GodsWheelWeb.AuthControllerTest do
         Accounts.register_user(%{
           full_name: "Unverified User",
           email: "unverified@example.com",
-          username: "unverified_user",
           password: "a-strong-password"
         })
 
@@ -139,7 +134,6 @@ defmodule GodsWheelWeb.AuthControllerTest do
         Accounts.register_user(%{
           full_name: "Test User",
           email: "me@example.com",
-          username: "me_user",
           password: "a-strong-password"
         })
 

@@ -1,0 +1,27 @@
+name: Deploy to Gigalixir
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Deploy to Gigalixir
+        uses: gigalixir/gigalixir-action@v0
+        with:
+          GIGALIXIR_USERNAME: ${{ secrets.GIGALIXIR_EMAIL }}
+          GIGALIXIR_PASSWORD: ${{ secrets.GIGALIXIR_API_KEY }}
+          GIGALIXIR_APP: godswheel
+          MIGRATIONS: true
+          SSH_PRIVATE_KEY: ${{ secrets.GIGALIXIR_SSH_PRIVATE_KEY }}
