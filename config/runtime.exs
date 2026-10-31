@@ -17,6 +17,8 @@ import Config
 # Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
 # script that automatically sets the env var above.
 
+config :swoosh, :api_client, Swoosh.ApiClient.Req
+
 config :godswheel, :frontend_url, System.get_env("FRONTEND_URL", "http://localhost:3000")
 
 if config_env() in [:prod, :staging] do
@@ -62,16 +64,7 @@ if config_env() in [:prod, :staging] do
     port: 587,
     tls: :always,
     auth: :always
-end
 
-if System.get_env("PHX_SERVER") do
-  config :godswheel, GodsWheelWeb.Endpoint, server: true
-end
-
-config :godswheel, GodsWheelWeb.Endpoint,
-  http: [port: String.to_integer(System.get_env("PORT", "4000"))]
-
-if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
       raise """
@@ -101,7 +94,7 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  host = System.get_env("PHX_HOST") || "example.com"
+  host = System.get_env("PHX_HOST") || raise "environment variable PHX_HOST is missing"
 
   config :godswheel, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
@@ -166,3 +159,10 @@ if config_env() == :prod do
   #
   # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
 end
+
+if System.get_env("PHX_SERVER") do
+  config :godswheel, GodsWheelWeb.Endpoint, server: true
+end
+
+config :godswheel, GodsWheelWeb.Endpoint,
+  http: [port: String.to_integer(System.get_env("PORT", "4000"))]
