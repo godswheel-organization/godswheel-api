@@ -4,19 +4,22 @@ defmodule GodsWheelWeb.Plugs.CORS do
   def init(opts), do: opts
 
   def call(conn, _opts) do
-    allowed_origin = Application.get_env(:godswheel, :frontend_origin)
+    allowed_origins = Application.get_env(:godswheel, :frontend_origins, [])
     request_origin = get_req_header(conn, "origin") |> List.first()
 
     conn =
-      if is_binary(allowed_origin) and request_origin == allowed_origin do
+      if request_origin in allowed_origins do
         conn
-        |> put_resp_header("access-control-allow-origin", allowed_origin)
+        |> put_resp_header("access-control-allow-origin", request_origin)
         |> put_resp_header("access-control-allow-credentials", "true")
         |> put_resp_header(
           "access-control-allow-methods",
           "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         )
-        |> put_resp_header("access-control-allow-headers", "authorization, content-type, x-requested-with")
+        |> put_resp_header(
+          "access-control-allow-headers",
+          "authorization, content-type, x-requested-with"
+        )
         |> put_resp_header("access-control-max-age", "600")
         |> put_resp_header("vary", "Origin")
       else

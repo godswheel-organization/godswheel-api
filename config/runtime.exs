@@ -18,17 +18,35 @@ import Config
 # script that automatically sets the env var above.
 
 frontend_url = System.get_env("FRONTEND_URL", "http://localhost:3000")
-frontend_uri = URI.parse(frontend_url)
-frontend_origin =
-  "#{frontend_uri.scheme}://#{frontend_uri.host}" <>
-    if(frontend_uri.port && frontend_uri.port not in [80, 443],
-      do: ":#{frontend_uri.port}",
-      else: ""
-    )
+
+frontend_origins =
+  System.get_env("FRONTEND_URLS", frontend_url)
+  |> String.split(",")
+  |> Enum.map(&String.trim/1)
+  |> Enum.reject(&(&1 == ""))
+  |> Enum.map(fn url ->
+    uri = URI.parse(url)
+
+    if uri.scheme not in ["http", "https"] or is_nil(uri.host) or
+         not is_nil(uri.userinfo) or uri.path not in [nil, ""] or
+         not is_nil(uri.query) or not is_nil(uri.fragment) do
+      raise ArgumentError, "Invalid frontend origin in FRONTEND_URLS: #{url}"
+    end
+
+    default_port = if uri.scheme == "https", do: 443, else: 80
+    port = if uri.port && uri.port != default_port, do: ":#{uri.port}", else: ""
+
+    "#{uri.scheme}://#{uri.host}#{port}"
+  end)
+  |> Enum.uniq()
+
+if frontend_origins == [] do
+  raise ArgumentError, "FRONTEND_URLS must contain at least one valid origin"
+end
 
 config :godswheel,
   frontend_url: frontend_url,
-  frontend_origin: frontend_origin,
+  frontend_origins: frontend_origins,
   refresh_cookie_secure: config_env() in [:prod, :staging],
   refresh_cookie_same_site:
     System.get_env(
