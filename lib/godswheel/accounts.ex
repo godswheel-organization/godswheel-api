@@ -6,7 +6,8 @@ defmodule GodsWheel.Accounts do
   alias GodsWheel.Accounts.{
     EmailVerificationToken,
     PasswordResetToken,
-    User
+    User,
+    UserSession
   }
 
   alias GodsWheel.Repo
@@ -75,6 +76,124 @@ defmodule GodsWheel.Accounts do
   end
 
   def get_user(id) when is_binary(id), do: Repo.get(User, id)
+
+  def create_user_session(%User{} = user) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    refresh_token = generate_token()
+    absolute_expires_at = DateTime.add(now, session_absolute_ttl_seconds(), :second)
+    expires_at =
+      min_datetime(DateTime.add(now, session_idle_ttl_seconds(), :second), absolute_expires_at)
+
+    result =
+      %UserSession{}
+      |> Ecto.Changeset.change(
+        user_id: user.id,
+        refresh_token_hash: hash_token(refresh_token),
+        expires_at: expires_at,
+        absolute_expires_at: absolute_expires_at,
+        last_used_at: now
+      )
+      |> Repo.insert()
+
+    case result do
+      {:ok, session} -> {:ok, session, refresh_token}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def rotate_user_session(refresh_token) when is_binary(refresh_token) do
+    token_hash = hash_token(refresh_token)
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    Repo.transaction(fn ->
+      session =
+        Repo.one(
+          from session in UserSession,
+            where:
+              session.refresh_token_hash == ^token_hash and is_nil(session.revoked_at) and
+                session.expires_at > ^now and session.absolute_expires_at > ^now,
+            lock: "FOR UPDATE"
+        )
+
+      if is_nil(session) do
+        Repo.rollback(:invalid_session)
+      end
+
+      user = Repo.get!(User, session.user_id)
+      new_refresh_token = generate_token()
+      new_expires_at =
+        min_datetime(
+          DateTime.add(now, session_idle_ttl_seconds(), :second),
+          session.absolute_expires_at
+        )
+
+      case session
+           |> Ecto.Changeset.change(
+             refresh_token_hash: hash_token(new_refresh_token),
+             expires_at: new_expires_at,
+             last_used_at: now
+           )
+           |> Repo.update() do
+        {:ok, updated_session} -> {user, updated_session, new_refresh_token}
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+    |> case do
+      {:ok, result} -> {:ok, result}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def rotate_user_session(_refresh_token), do: {:error, :invalid_session}
+
+  def active_session?(session_id) when is_binary(session_id) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    Repo.exists?(
+      from session in UserSession,
+        where:
+          session.id == ^session_id and is_nil(session.revoked_at) and
+            session.expires_at > ^now and session.absolute_expires_at > ^now
+    )
+  end
+
+  def revoke_user_session(session_id) when is_binary(session_id) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    Repo.update_all(
+      from(session in UserSession,
+        where: session.id == ^session_id and is_nil(session.revoked_at)
+      ),
+      set: [revoked_at: now]
+    )
+
+    :ok
+  end
+
+  def revoke_all_user_sessions(user_id) when is_binary(user_id) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    Repo.update_all(
+      from(session in UserSession,
+        where: session.user_id == ^user_id and is_nil(session.revoked_at)
+      ),
+      set: [revoked_at: now]
+    )
+
+    :ok
+  end
+
+  defp session_idle_ttl_seconds do
+    Application.get_env(:godswheel, :session_idle_ttl_seconds, 2_592_000)
+  end
+
+  defp session_absolute_ttl_seconds do
+    Application.get_env(:godswheel, :session_absolute_ttl_seconds, 7_776_000)
+  end
+
+  defp min_datetime(left, right) do
+    if DateTime.compare(left, right) == :lt, do: left, else: right
+  end
 
   def verify_email(token) when is_binary(token) do
     token_hash = hash_token(token)
@@ -326,6 +445,13 @@ defmodule GodsWheel.Accounts do
               where: token.user_id == ^user.id and is_nil(token.used_at)
             ),
             set: [used_at: now]
+          )
+
+          Repo.update_all(
+            from(session in UserSession,
+              where: session.user_id == ^user.id and is_nil(session.revoked_at)
+            ),
+            set: [revoked_at: now]
           )
 
           updated_user

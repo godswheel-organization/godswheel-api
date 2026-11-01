@@ -9,6 +9,10 @@ defmodule GodsWheelWeb.Router do
     plug GodsWheelWeb.Plugs.Authenticate
   end
 
+  pipeline :same_origin_api do
+    plug GodsWheelWeb.Plugs.VerifyOrigin
+  end
+
   pipeline :dashboard do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -36,6 +40,14 @@ defmodule GodsWheelWeb.Router do
     pipe_through [:api, :authenticated_api]
 
     get "/auth/me", AuthController, :me
+    post "/auth/logout", AuthController, :logout
+    post "/auth/logout-all", AuthController, :logout_all
+  end
+
+  scope "/api/v1/auth", GodsWheelWeb do
+    pipe_through [:api, :same_origin_api]
+
+    post "/refresh", AuthController, :refresh
   end
 
   get "/api/v1/openapi.json", GodsWheelWeb.OpenApiController, :spec

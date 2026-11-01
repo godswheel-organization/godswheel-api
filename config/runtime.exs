@@ -17,7 +17,28 @@ import Config
 # Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
 # script that automatically sets the env var above.
 
-config :godswheel, :frontend_url, System.get_env("FRONTEND_URL", "http://localhost:3000")
+frontend_url = System.get_env("FRONTEND_URL", "http://localhost:3000")
+frontend_uri = URI.parse(frontend_url)
+frontend_origin =
+  "#{frontend_uri.scheme}://#{frontend_uri.host}" <>
+    if(frontend_uri.port && frontend_uri.port not in [80, 443],
+      do: ":#{frontend_uri.port}",
+      else: ""
+    )
+
+config :godswheel,
+  frontend_url: frontend_url,
+  frontend_origin: frontend_origin,
+  refresh_cookie_secure: config_env() in [:prod, :staging],
+  refresh_cookie_same_site:
+    System.get_env(
+      "REFRESH_COOKIE_SAME_SITE",
+      if(config_env() in [:prod, :staging], do: "None", else: "Lax")
+    ),
+  session_idle_ttl_seconds:
+    String.to_integer(System.get_env("SESSION_IDLE_TTL_SECONDS", "2592000")),
+  session_absolute_ttl_seconds:
+    String.to_integer(System.get_env("SESSION_ABSOLUTE_TTL_SECONDS", "7776000"))
 
 if config_env() in [:prod, :staging] do
   dashboard_username =

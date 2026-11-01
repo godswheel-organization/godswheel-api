@@ -65,6 +65,3 @@ config :phoenix, :plug_init_mode, :runtime
 # Local-only signing secret for JWT access tokens. Override through runtime
 # configuration if you share this development environment.
 config :godswheel, :jwt_secret, "godswheel-development-jwt-secret-change-before-deployment"
-
-config :godswheel, :frontend_url, System.get_env("FRONTEND_URL", "http://localhost:3000")
-config :godswheel, :from_email, {"Godswheel", System.get_env("FROM_EMAIL", "no-reply@godswheel.local")}

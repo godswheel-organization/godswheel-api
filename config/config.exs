@@ -32,10 +32,6 @@ config :godswheel, GodsWheelWeb.Endpoint,
 # at the `config/runtime.exs`.
 config :godswheel, GodsWheel.Mailer, adapter: Swoosh.Adapters.Local
 
-config :godswheel,
-  frontend_url: "http://localhost:3000",
-  from_email: {"Godswheel", "no-reply@godswheel.app"}
-
 config :swoosh, :api_client, false
 
 # Configure Elixir's Logger

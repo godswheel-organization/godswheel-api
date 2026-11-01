@@ -4,12 +4,13 @@ defmodule GodsWheelWeb.JWT do
   @issuer "godswheel-api"
   @ttl_seconds 3_600
 
-  def sign(user) do
+  def sign(user, session_id) do
     now = System.system_time(:second)
 
     claims = %{
       "iss" => @issuer,
       "sub" => user.id,
+      "sid" => session_id,
       "iat" => now,
       "exp" => now + @ttl_seconds
     }
@@ -17,7 +18,11 @@ defmodule GodsWheelWeb.JWT do
     with {:ok, header} <- encode_segment(%{"alg" => "HS256", "typ" => "JWT"}),
          {:ok, payload} <- encode_segment(claims) do
       signing_input = header <> "." <> payload
-      signature = :crypto.mac(:hmac, :sha256, secret(), signing_input) |> Base.url_encode64(padding: false)
+
+      signature =
+        :crypto.mac(:hmac, :sha256, secret(), signing_input)
+        |> Base.url_encode64(padding: false)
+
       {:ok, signing_input <> "." <> signature, claims}
     end
   end
@@ -34,6 +39,7 @@ defmodule GodsWheelWeb.JWT do
          {:ok, claims} <- Jason.decode(payload_json),
          true <- claims["iss"] == @issuer,
          true <- is_binary(claims["sub"]),
+         true <- is_binary(claims["sid"]),
          true <- is_integer(claims["exp"]),
          true <- claims["exp"] > System.system_time(:second) do
       {:ok, claims}
@@ -44,6 +50,8 @@ defmodule GodsWheelWeb.JWT do
 
   def verify(_token), do: {:error, :invalid_token}
 
+  def ttl_seconds, do: @ttl_seconds
+
   defp encode_segment(value) do
     value
     |> Jason.encode()
@@ -53,9 +61,7 @@ defmodule GodsWheelWeb.JWT do
     end
   end
 
-  defp secret do
-    Application.fetch_env!(:godswheel, :jwt_secret)
-  end
+  defp secret, do: Application.fetch_env!(:godswheel, :jwt_secret)
 
   defp secure_compare(left, right) when byte_size(left) == byte_size(right) do
     :crypto.hash_equals(left, right)

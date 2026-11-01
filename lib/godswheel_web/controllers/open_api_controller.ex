@@ -97,6 +97,41 @@ defmodule GodsWheelWeb.OpenApiController do
             }
           )
         },
+        "/api/v1/auth/refresh" => %{
+          post: %{
+            tags: ["Authentication"],
+            summary: "Refresh access token",
+            description: "Uses the HttpOnly refresh-token cookie to rotate the session refresh token and issue a new one-hour access token. The browser must send credentials.",
+            security: [%{RefreshCookie: []}],
+            responses: %{
+              "200" => response("Access token refreshed; refresh cookie rotated.", "RefreshResponse"),
+              "401" => response("Refresh session is invalid, expired, or revoked.", "ErrorResponse"),
+              "403" => response("Request origin is not allowed.", "ErrorResponse")
+            }
+          }
+        },
+        "/api/v1/auth/logout" => %{
+          post: %{
+            tags: ["Authentication"],
+            summary: "Log out current session",
+            security: [%{BearerAuth: []}],
+            responses: %{
+              "200" => response("Current session revoked and refresh cookie cleared.", "MessageResponse"),
+              "401" => response("Authentication required.", "ErrorResponse")
+            }
+          }
+        },
+        "/api/v1/auth/logout-all" => %{
+          post: %{
+            tags: ["Authentication"],
+            summary: "Log out all sessions",
+            security: [%{BearerAuth: []}],
+            responses: %{
+              "200" => response("All user sessions revoked.", "MessageResponse"),
+              "401" => response("Authentication required.", "ErrorResponse")
+            }
+          }
+        },
         "/api/v1/auth/resend-verification" => %{
           post: operation(
             "Authentication",
@@ -148,6 +183,11 @@ defmodule GodsWheelWeb.OpenApiController do
       },
       components: %{
         securitySchemes: %{
+          RefreshCookie: %{
+            type: "apiKey",
+            in: "cookie",
+            name: "godswheel_refresh"
+          },
           BearerAuth: %{
             type: "http",
             scheme: "bearer",
@@ -193,8 +233,17 @@ defmodule GodsWheelWeb.OpenApiController do
               user: ref_schema("PublicUser"),
               access_token: string_schema("Signed JWT access token"),
               token_type: %{type: "string", enum: ["Bearer"]},
+              expires_in: %{type: "integer", description: "Access token lifetime in seconds"},
               expires_at: %{type: "string", format: "date-time"}
-            }, ["user", "access_token", "token_type", "expires_at"])
+            }, ["user", "access_token", "token_type", "expires_in", "expires_at"])
+          }, ["data"]),
+          RefreshResponse: object_schema(%{
+            data: object_schema(%{
+              access_token: string_schema("New signed JWT access token"),
+              token_type: %{type: "string", enum: ["Bearer"]},
+              expires_in: %{type: "integer"},
+              expires_at: %{type: "string", format: "date-time"}
+            }, ["access_token", "token_type", "expires_in", "expires_at"])
           }, ["data"]),
           UserResponse: object_schema(%{
             data: ref_schema("PublicUser")
