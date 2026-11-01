@@ -2,7 +2,7 @@ defmodule GodsWheelWeb.Plugs.Authenticate do
   import Plug.Conn
 
   alias GodsWheel.Accounts
-  alias GodsWheelWeb.JWT
+  alias GodsWheelWeb.{JWT, Response}
 
   def init(opts), do: opts
 
@@ -18,7 +18,12 @@ defmodule GodsWheelWeb.Plugs.Authenticate do
       _ ->
         conn
         |> put_resp_content_type("application/json")
-        |> send_resp(:unauthorized, Jason.encode!(%{error: %{message: "Authentication required"}}))
+        |> send_resp(
+          :unauthorized,
+          Jason.encode!(
+            Response.error("authentication_required", "Authentication required.")
+          )
+        )
         |> halt()
     end
   end

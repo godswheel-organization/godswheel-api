@@ -1,6 +1,8 @@
 defmodule GodsWheelWeb.Plugs.VerifyOrigin do
   import Plug.Conn
 
+  alias GodsWheelWeb.Response
+
   def init(opts), do: opts
 
   def call(conn, _opts) do
@@ -14,12 +16,7 @@ defmodule GodsWheelWeb.Plugs.VerifyOrigin do
       |> put_resp_content_type("application/json")
       |> send_resp(
         :forbidden,
-        Jason.encode!(%{
-          error: %{
-            code: "invalid_origin",
-            message: "Request origin is not allowed"
-          }
-        })
+        Jason.encode!(Response.error("invalid_origin", "Request origin is not allowed."))
       )
       |> halt()
     end

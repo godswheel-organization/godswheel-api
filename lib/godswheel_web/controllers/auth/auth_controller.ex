@@ -2,60 +2,66 @@ defmodule GodsWheelWeb.AuthController do
   use GodsWheelWeb, :controller
 
   alias GodsWheel.Accounts
-  alias GodsWheelWeb.JWT
+  alias GodsWheelWeb.{JWT, Response}
 
   @refresh_cookie "godswheel_refresh"
   @refresh_cookie_path "/api/v1/auth/refresh"
-
-  action_fallback GodsWheelWeb.FallbackController
 
   def signup(conn, %{"user" => attrs}), do: signup(conn, attrs)
 
   def signup(conn, attrs) when is_map(attrs) do
     case Accounts.register_user(attrs) do
       {:ok, user} ->
-        conn
-        |> put_status(:created)
-        |> json(%{
-          data: %{
+        Response.send_success(
+          conn,
+          :created,
+          %{
             message: "Account created. Check your email to verify your account.",
             user: public_user(user)
           }
-        })
+        )
 
       {:error, %Ecto.Changeset{} = changeset} ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{errors: errors_on(changeset)})
+        Response.send_error(
+          conn,
+          :unprocessable_entity,
+          "validation_error",
+          "The submitted account details are invalid.",
+          errors_on(changeset)
+        )
     end
   end
 
-  def login(conn, %{"identifier" => identifier, "password" => password}) do
+  def login(conn, %{"email" => identifier, "password" => password}) do
     case Accounts.authenticate(identifier, password) do
       {:ok, user} ->
         issue_session(conn, user)
 
       {:error, :email_not_verified} ->
-        conn
-        |> put_status(:forbidden)
-        |> json(%{
-          error: %{
-            code: "email_not_verified",
-            message: "Verify your email address before logging in."
-          }
-        })
+        Response.send_error(
+          conn,
+          :forbidden,
+          "email_not_verified",
+          "Verify your email address before logging in."
+        )
 
       {:error, :invalid_credentials} ->
-        conn
-        |> put_status(:unauthorized)
-        |> json(%{error: %{message: "Invalid email or password"}})
+        Response.send_error(
+          conn,
+          :unauthorized,
+          "invalid_credentials",
+          "Invalid email or password."
+        )
     end
   end
 
   def login(conn, _params) do
-    conn
-    |> put_status(:unprocessable_entity)
-    |> json(%{error: %{message: "identifier (email) and password are required"}})
+    Response.send_error(
+      conn,
+      :unprocessable_entity,
+      "missing_credentials",
+      "identifier (email) and password are required."
+    )
   end
 
   def verify_email(conn, %{"token" => token}) do
@@ -64,21 +70,22 @@ defmodule GodsWheelWeb.AuthController do
         issue_session(conn, user)
 
       {:error, _reason} ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{
-          error: %{
-            code: "invalid_or_expired_token",
-            message: "The email verification token is invalid or expired."
-          }
-        })
+        Response.send_error(
+          conn,
+          :unprocessable_entity,
+          "invalid_or_expired_token",
+          "The email verification token is invalid or expired."
+        )
     end
   end
 
   def verify_email(conn, _params) do
-    conn
-    |> put_status(:unprocessable_entity)
-    |> json(%{error: %{message: "token is required"}})
+    Response.send_error(
+      conn,
+      :unprocessable_entity,
+      "missing_token",
+      "token is required."
+    )
   end
 
   def refresh(conn, _params) do
@@ -92,35 +99,22 @@ defmodule GodsWheelWeb.AuthController do
 
             conn
             |> put_refresh_cookie(new_refresh_token)
-            |> json(%{
-              data: %{
+            |> json(
+              Response.success(%{
                 access_token: access_token,
                 token_type: "Bearer",
                 expires_in: JWT.ttl_seconds(),
-                expires_at: DateTime.from_unix!(claims["exp"], :second) |> DateTime.to_iso8601()
-              }
-            })
+                expires_at:
+                  DateTime.from_unix!(claims["exp"], :second) |> DateTime.to_iso8601()
+              })
+            )
 
           {:error, _reason} ->
-            conn
-            |> put_status(:unauthorized)
-            |> json(%{
-              error: %{
-                code: "session_expired",
-                message: "The session is invalid or expired. Please log in again."
-              }
-            })
+            session_expired(conn)
         end
 
       _ ->
-        conn
-        |> put_status(:unauthorized)
-        |> json(%{
-          error: %{
-            code: "session_expired",
-            message: "The session is invalid or expired. Please log in again."
-          }
-        })
+        session_expired(conn)
     end
   end
 
@@ -129,7 +123,7 @@ defmodule GodsWheelWeb.AuthController do
 
     conn
     |> clear_refresh_cookie()
-    |> json(%{data: %{message: "Logged out successfully."}})
+    |> json(Response.success(%{message: "Logged out successfully."}))
   end
 
   def logout_all(conn, _params) do
@@ -137,7 +131,32 @@ defmodule GodsWheelWeb.AuthController do
 
     conn
     |> clear_refresh_cookie()
-    |> json(%{data: %{message: "All sessions have been logged out."}})
+    |> json(Response.success(%{message: "All sessions have been logged out."}))
+  end
+
+  def resend_verification(conn, %{"email" => email}) do
+    :ok = Accounts.resend_verification_email(email)
+
+    json(
+      conn,
+      Response.success(%{
+        message:
+          "If an unverified account exists for that email, a verification email will be sent."
+      })
+    )
+  end
+
+  def resend_verification(conn, _params) do
+    Response.send_error(
+      conn,
+      :unprocessable_entity,
+      "missing_email",
+      "email is required."
+    )
+  end
+
+  def me(conn, _params) do
+    render(conn, :user, user: conn.assigns.current_user)
   end
 
   defp issue_session(conn, user) do
@@ -148,10 +167,23 @@ defmodule GodsWheelWeb.AuthController do
       |> render(:session, user: user, token: access_token, claims: claims)
     else
       {:error, _reason} ->
-        conn
-        |> put_status(:internal_server_error)
-        |> json(%{error: %{message: "Unable to create authenticated session."}})
+        Response.send_error(
+          conn,
+          :internal_server_error,
+          "session_creation_failed",
+          "Unable to create authenticated session."
+        )
     end
+  end
+
+  defp session_expired(conn) do
+    conn
+    |> clear_refresh_cookie()
+    |> Response.send_error(
+      :unauthorized,
+      "session_expired",
+      "The session is invalid or expired. Please log in again."
+    )
   end
 
   defp put_refresh_cookie(conn, token) do
@@ -173,26 +205,6 @@ defmodule GodsWheelWeb.AuthController do
     )
   end
 
-  def resend_verification(conn, %{"email" => email}) do
-    :ok = Accounts.resend_verification_email(email)
-
-    json(conn, %{
-      data: %{
-        message: "If an unverified account exists for that email, a verification email will be sent."
-      }
-    })
-  end
-
-  def resend_verification(conn, _params) do
-    conn
-    |> put_status(:unprocessable_entity)
-    |> json(%{error: %{message: "email is required"}})
-  end
-
-  def me(conn, _params) do
-    render(conn, :user, user: conn.assigns.current_user)
-  end
-
   defp public_user(user) do
     %{
       id: user.id,
@@ -204,7 +216,7 @@ defmodule GodsWheelWeb.AuthController do
 
   defp errors_on(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
-      Regex.replace(~r/%{(\w+)}/, message, fn _, key ->
+      Regex.replace(~r/%{(\\w+)}/, message, fn _, key ->
         opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
       end)
     end)

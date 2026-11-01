@@ -28,6 +28,10 @@ defmodule GodsWheelWeb.Router do
     pipe_through :api
 
     get "/health", HealthController, :show
+    get "/sermons", Sermon.SermonController, :index
+    get "/sermons/:id", Sermon.SermonController, :show
+    get "/categories", Sermon.CategoryController, :index
+    get "/speakers", Sermon.SpeakerController, :index
     post "/auth/signup", AuthController, :signup
     post "/auth/login", AuthController, :login
     post "/auth/verify-email", AuthController, :verify_email

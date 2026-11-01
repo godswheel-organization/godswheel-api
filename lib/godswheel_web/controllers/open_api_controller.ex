@@ -46,9 +46,38 @@ defmodule GodsWheelWeb.OpenApiController do
       servers: [%{url: "/"}],
       tags: [
         %{name: "Health", description: "Service health checks"},
-        %{name: "Authentication", description: "Account registration and authentication"}
+        %{name: "Authentication", description: "Account registration and authentication"},
+        %{name: "Sermons", description: "Public sermon discovery and catalogue"},
+        %{name: "Categories", description: "Public sermon categories"},
+        %{name: "Speakers", description: "Public sermon speakers"}
       ],
       paths: %{
+        "/api/v1/sermons" => %{
+          get: catalogue_operation(
+            "Sermons",
+            "List sermons",
+            "Returns published sermons with optional title/description search, filters, sorting and pagination. Omit search_in[] to search both title and description; provide title and/or description to restrict the search fields.",
+            ["search", "search_in[]", "category_id", "speaker_id", "scripture", "language", "sort", "page", "limit"],
+            "SermonListResponse"
+          )
+        },
+        "/api/v1/sermons/{id}" => %{
+          get: %{
+            tags: ["Sermons"],
+            summary: "Get sermon",
+            parameters: [%{name: "id", in: "path", required: true, schema: %{type: "string", format: "uuid"}}],
+            responses: %{
+              "200" => response("Published sermon details.", "SermonResponse"),
+              "404" => response("Sermon not found.", "ErrorResponse")
+            }
+          }
+        },
+        "/api/v1/categories" => %{
+          get: catalogue_operation("Categories", "List categories", "Searches categories by name and returns paginated results.", ["search", "page", "limit"], "CategoryListResponse")
+        },
+        "/api/v1/speakers" => %{
+          get: catalogue_operation("Speakers", "List speakers", "Searches speakers by name and returns paginated results.", ["search", "page", "limit"], "SpeakerListResponse")
+        },
         "/api/v1/health" => %{
           get: %{
             tags: ["Health"],
@@ -195,11 +224,65 @@ defmodule GodsWheelWeb.OpenApiController do
           }
         },
         schemas: %{
+          PaginationMeta: object_schema(%{
+            page: %{type: "integer"},
+            limit: %{type: "integer"},
+            totalEntries: %{type: "integer"},
+            totalPages: %{type: "integer"},
+            hasNextPage: %{type: "boolean"},
+            hasPrevPage: %{type: "boolean"}
+          }, ["page", "limit", "totalEntries", "totalPages", "hasNextPage", "hasPrevPage"]),
+          Sermon: object_schema(%{
+            id: %{type: "string", format: "uuid"},
+            title: string_schema("Sermon title"),
+            slug: string_schema("Sermon slug"),
+            description: string_schema("Sermon description"),
+            audioUrl: string_schema("Audio resource URL"),
+            thumbnailUrl: string_schema("Thumbnail URL"),
+            scriptureReference: string_schema("Scripture reference"),
+            durationSeconds: %{type: ["integer", "null"]},
+            language: string_schema("Language"),
+            publishedAt: %{type: "string", format: "date-time"},
+            speaker: ref_schema("Speaker"),
+            categories: %{type: "array", items: ref_schema("Category")}
+          }, ["id", "title", "slug", "audioUrl", "speaker", "categories"]),
+          Category: object_schema(%{
+            id: %{type: "string", format: "uuid"},
+            name: string_schema("Category name"),
+            slug: string_schema("Category slug"),
+            description: string_schema("Category description")
+          }, ["id", "name", "slug"]),
+          Speaker: object_schema(%{
+            id: %{type: "string", format: "uuid"},
+            name: string_schema("Speaker name"),
+            bio: string_schema("Speaker biography"),
+            imageUrl: string_schema("Speaker image URL")
+          }, ["id", "name"]),
+          SermonListResponse: object_schema(%{
+            success: %{type: "boolean", enum: [true]},
+            data: %{type: "array", items: ref_schema("Sermon")},
+            meta: ref_schema("PaginationMeta")
+          }, ["success", "data", "meta"]),
+          SermonResponse: object_schema(%{
+            success: %{type: "boolean", enum: [true]},
+            data: ref_schema("Sermon")
+          }, ["success", "data"]),
+          CategoryListResponse: object_schema(%{
+            success: %{type: "boolean", enum: [true]},
+            data: %{type: "array", items: ref_schema("Category")},
+            meta: ref_schema("PaginationMeta")
+          }, ["success", "data", "meta"]),
+          SpeakerListResponse: object_schema(%{
+            success: %{type: "boolean", enum: [true]},
+            data: %{type: "array", items: ref_schema("Speaker")},
+            meta: ref_schema("PaginationMeta")
+          }, ["success", "data", "meta"]),
           HealthResponse: object_schema(%{
+            success: %{type: "boolean", enum: [true]},
             data: object_schema(%{
               status: %{type: "string", enum: ["ok"]}
             }, ["status"])
-          }, ["data"]),
+          }, ["success", "data"]),
           SignupRequest: object_schema(
             %{
               full_name: string_schema("User's full name", minLength: 2, maxLength: 120),
@@ -209,15 +292,16 @@ defmodule GodsWheelWeb.OpenApiController do
             ["full_name", "email", "password"]
           ),
           SignupResponse: object_schema(%{
+            success: %{type: "boolean", enum: [true]},
             data: object_schema(%{
               message: string_schema("Registration confirmation message"),
               user: ref_schema("PublicUser")
             }, ["message", "user"])
-          }, ["data"]),
+          }, ["success", "data"]),
           LoginRequest: object_schema(%{
-            identifier: string_schema("Email address", format: "email"),
+            email: string_schema("Email address", format: "email"),
             password: string_schema("Account password")
-          }, ["identifier", "password"]),
+          }, ["email", "password"]),
           EmailRequest: object_schema(%{
             email: string_schema("Email address", format: "email")
           }, ["email"]),
@@ -229,57 +313,112 @@ defmodule GodsWheelWeb.OpenApiController do
             password: string_schema("New password; 8 to 72 characters", minLength: 8, maxLength: 72)
           }, ["token", "password"]),
           SessionResponse: object_schema(%{
+            success: %{type: "boolean", enum: [true]},
             data: object_schema(%{
               user: ref_schema("PublicUser"),
-              access_token: string_schema("Signed JWT access token"),
-              token_type: %{type: "string", enum: ["Bearer"]},
-              expires_in: %{type: "integer", description: "Access token lifetime in seconds"},
-              expires_at: %{type: "string", format: "date-time"}
-            }, ["user", "access_token", "token_type", "expires_in", "expires_at"])
-          }, ["data"]),
+              accessToken: string_schema("Signed JWT access token"),
+              tokenType: %{type: "string", enum: ["Bearer"]},
+              expiresIn: %{type: "integer", description: "Access token lifetime in seconds"},
+              expiresAt: %{type: "string", format: "date-time"}
+            }, ["user", "accessToken", "tokenType", "expiresIn", "expiresAt"])
+          }, ["success", "data"]),
           RefreshResponse: object_schema(%{
+            success: %{type: "boolean", enum: [true]},
             data: object_schema(%{
-              access_token: string_schema("New signed JWT access token"),
-              token_type: %{type: "string", enum: ["Bearer"]},
-              expires_in: %{type: "integer"},
-              expires_at: %{type: "string", format: "date-time"}
-            }, ["access_token", "token_type", "expires_in", "expires_at"])
-          }, ["data"]),
+              accessToken: string_schema("New signed JWT access token"),
+              tokenType: %{type: "string", enum: ["Bearer"]},
+              expiresIn: %{type: "integer"},
+              expiresAt: %{type: "string", format: "date-time"}
+            }, ["accessToken", "tokenType", "expiresIn", "expiresAt"])
+          }, ["success", "data"]),
           UserResponse: object_schema(%{
+            success: %{type: "boolean", enum: [true]},
             data: ref_schema("PublicUser")
-          }, ["data"]),
+          }, ["success", "data"]),
           PublicUser: object_schema(%{
             id: %{type: "string", format: "uuid"},
-            full_name: string_schema("User's full name"),
+            fullName: string_schema("User's full name"),
             email: string_schema("Email address", format: "email"),
-            email_verified: %{type: "boolean"}
-          }, ["id", "full_name", "email", "email_verified"]),
+            emailVerified: %{type: "boolean"}
+          }, ["id", "fullName", "email", "emailVerified"]),
           MessageResponse: object_schema(%{
+            success: %{type: "boolean", enum: [true]},
             data: object_schema(%{
               message: string_schema("Human-readable result message")
             }, ["message"])
-          }, ["data"]),
+          }, ["success", "data"]),
           ErrorResponse: object_schema(%{
+            success: %{type: "boolean", enum: [false]},
             error: object_schema(%{
               code: %{type: "string"},
-              message: string_schema("Human-readable error message")
-            }, ["message"])
-          }, ["error"]),
-          ValidationError: object_schema(%{
-            errors: %{
-              type: "object",
-              additionalProperties: %{
-                oneOf: [
-                  %{type: "string"},
-                  %{type: "array", items: %{type: "string"}}
-                ]
-              }
-            }
-          }, ["errors"])
+              message: string_schema("Human-readable error message"),
+              details: %{type: ["object", "null"], additionalProperties: true}
+            }, ["code", "message", "details"])
+          }, ["success", "error"]),
+          ValidationError: ref_schema("ErrorResponse")
         }
       }
     }
   end
+
+
+defp catalogue_operation(tag, summary, description, parameter_names, response_schema) do
+  %{
+    tags: [tag],
+    summary: summary,
+    description: description,
+    parameters:
+      Enum.map(parameter_names, fn name ->
+        %{
+          name: name,
+          in: "query",
+          required: false,
+          description: parameter_description(name),
+          schema:
+            cond do
+              name == "page" ->
+                %{type: "integer", minimum: 1, default: 1}
+
+              name == "limit" ->
+                %{type: "integer", minimum: 1, maximum: 100, default: 20}
+
+              name == "search_in[]" ->
+                %{
+                  type: "array",
+                  items: %{type: "string", enum: ["title", "description"]}
+                }
+
+              name == "sort" ->
+                %{
+                  type: "string",
+                  enum: ["newest", "oldest"],
+                  default: "newest"
+                }
+
+              true ->
+                %{type: "string"}
+            end,
+          style: if(name == "search_in[]", do: "form", else: nil),
+          explode: if(name == "search_in[]", do: true, else: nil)
+        }
+      end),
+    responses: %{
+      "200" => response("Paginated catalogue results.", response_schema),
+      "422" => response("Invalid query parameters.", "ErrorResponse")
+    }
+  }
+end
+
+defp parameter_description("sort") do
+  "Controls sermon ordering. newest: most recently published first (default). oldest: earliest published first."
+end
+
+defp parameter_description("search_in[]") do
+  "Fields to search. Accepts title and/or description. When omitted, both fields are searched."
+end
+
+defp parameter_description(_name), do: nil
+
 
   defp operation(tag, summary, description, request_schema, responses) do
     %{

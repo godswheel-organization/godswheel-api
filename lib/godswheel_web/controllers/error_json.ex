@@ -1,21 +1,19 @@
 defmodule GodsWheelWeb.ErrorJSON do
-  @moduledoc """
-  This module is invoked by your endpoint in case of errors on JSON requests.
+  alias GodsWheelWeb.Response
 
-  See config/config.exs.
-  """
-
-  # If you want to customize a particular status code,
-  # you may add your own clauses, such as:
-  #
-  # def render("500.json", _assigns) do
-  #   %{errors: %{detail: "Internal Server Error"}}
-  # end
-
-  # By default, Phoenix returns the status message from
-  # the template name. For example, "404.json" becomes
-  # "Not Found".
   def render(template, _assigns) do
-    %{errors: %{detail: Phoenix.Controller.status_message_from_template(template)}}
+    status = template |> String.split(".") |> List.first()
+    message = Phoenix.Controller.status_message_from_template(template)
+    code = error_code(status)
+
+    Response.error(code, message)
   end
+
+  defp error_code("400"), do: "bad_request"
+  defp error_code("401"), do: "unauthorized"
+  defp error_code("403"), do: "forbidden"
+  defp error_code("404"), do: "not_found"
+  defp error_code("405"), do: "method_not_allowed"
+  defp error_code("422"), do: "unprocessable_entity"
+  defp error_code(_), do: "internal_server_error"
 end
