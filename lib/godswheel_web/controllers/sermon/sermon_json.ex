@@ -43,13 +43,34 @@ defmodule GodsWheelWeb.Sermon.SermonJSON do
       description: sermon.description,
       audio_url: sermon.audio_url,
       thumbnail_url: sermon.thumbnail_url,
-      scripture_reference: sermon.scripture_reference,
+      scriptures: Enum.map(sermon.scriptures, &scripture/1),
       duration_seconds: sermon.duration_seconds,
       language: sermon.language,
       published_at: sermon.published_at,
       speaker: speaker(sermon.speaker),
       categories: Enum.map(sermon.categories, &category/1)
     }
+  end
+
+  defp scripture(scripture) do
+    %{
+      id: scripture.id,
+      book: scripture.book,
+      chapter: scripture.chapter,
+      start_verse: scripture.start_verse,
+      end_verse: scripture.end_verse,
+      reference: scripture_reference(scripture)
+    }
+  end
+
+  defp scripture_reference(scripture) do
+    reference = "#{scripture.book} #{scripture.chapter}:#{scripture.start_verse}"
+
+    if scripture.end_verse > scripture.start_verse do
+      reference <> "-#{scripture.end_verse}"
+    else
+      reference
+    end
   end
 
   defp category_summary(category) do

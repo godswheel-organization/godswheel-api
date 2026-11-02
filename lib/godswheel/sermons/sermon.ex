@@ -11,7 +11,6 @@ defmodule GodsWheel.Sermons.Sermon do
     field :description, :string
     field :audio_url, :string
     field :thumbnail_url, :string
-    field :scripture_reference, :string
     field :duration_seconds, :integer
     field :language, :string
     field :published_at, :utc_datetime_usec
@@ -20,6 +19,10 @@ defmodule GodsWheel.Sermons.Sermon do
 
     many_to_many :categories, GodsWheel.Sermons.Category,
       join_through: "sermon_categories",
+      on_replace: :delete
+
+    many_to_many :scriptures, GodsWheel.Sermons.Scripture,
+      join_through: "sermon_scriptures",
       on_replace: :delete
 
     timestamps(type: :utc_datetime_usec)
@@ -33,7 +36,6 @@ defmodule GodsWheel.Sermons.Sermon do
       :description,
       :audio_url,
       :thumbnail_url,
-      :scripture_reference,
       :duration_seconds,
       :language,
       :speaker_id,

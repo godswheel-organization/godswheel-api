@@ -56,7 +56,7 @@ defmodule GodsWheelWeb.OpenApiController do
           get: catalogue_operation(
             "Sermons",
             "List sermons",
-            "Returns published sermons with optional title/description search, filters, sorting and pagination. Omit search_in[] to search both title and description; provide title and/or description to restrict the search fields.",
+            "Returns published sermons with optional title/description search, filters, sorting and pagination. Omit search_in[] to search both title and description; provide title and/or description to restrict the search fields. The scripture filter accepts a book, chapter, verse, or verse range, such as Romans, Romans 8, Romans 8:28, or Romans 8:28-30.",
             ["search", "search_in[]", "category_id", "speaker_id", "scripture", "language", "sort", "page", "limit"],
             "SermonListResponse"
           )
@@ -239,13 +239,21 @@ defmodule GodsWheelWeb.OpenApiController do
             description: string_schema("Sermon description"),
             audioUrl: string_schema("Audio resource URL"),
             thumbnailUrl: string_schema("Thumbnail URL"),
-            scriptureReference: string_schema("Scripture reference"),
+            scriptures: %{type: "array", items: ref_schema("Scripture")},
             durationSeconds: %{type: ["integer", "null"]},
             language: string_schema("Language"),
             publishedAt: %{type: "string", format: "date-time"},
             speaker: ref_schema("Speaker"),
             categories: %{type: "array", items: ref_schema("Category")}
-          }, ["id", "title", "slug", "audioUrl", "speaker", "categories"]),
+          }, ["id", "title", "slug", "audioUrl", "speaker", "categories", "scriptures"]),
+          Scripture: object_schema(%{
+            id: %{type: "string", format: "uuid"},
+            book: string_schema("Bible book"),
+            chapter: %{type: "integer"},
+            start_verse: %{type: "integer"},
+            end_verse: %{type: "integer"},
+            reference: string_schema("Formatted scripture reference")
+          }, ["id", "book", "chapter", "start_verse", "end_verse", "reference"]),
           Category: object_schema(%{
             id: %{type: "string", format: "uuid"},
             name: string_schema("Category name"),
@@ -258,9 +266,19 @@ defmodule GodsWheelWeb.OpenApiController do
             bio: string_schema("Speaker biography"),
             imageUrl: string_schema("Speaker image URL")
           }, ["id", "name"]),
+          SermonSummary: object_schema(%{
+            id: %{type: "string", format: "uuid"},
+            title: string_schema("Sermon title"),
+            slug: string_schema("Sermon slug"),
+            thumbnailUrl: string_schema("Thumbnail URL"),
+            durationSeconds: %{type: ["integer", "null"]},
+            publishedAt: %{type: "string", format: "date-time"},
+            speaker: ref_schema("Speaker"),
+            categories: %{type: "array", items: ref_schema("Category")}
+          }, ["id", "title", "slug", "speaker", "categories"]),
           SermonListResponse: object_schema(%{
             success: %{type: "boolean", enum: [true]},
-            data: %{type: "array", items: ref_schema("Sermon")},
+            data: %{type: "array", items: ref_schema("SermonSummary")},
             meta: ref_schema("PaginationMeta")
           }, ["success", "data", "meta"]),
           SermonResponse: object_schema(%{
@@ -415,6 +433,10 @@ end
 
 defp parameter_description("search_in[]") do
   "Fields to search. Accepts title and/or description. When omitted, both fields are searched."
+end
+
+defp parameter_description("scripture") do
+  "Filters by scripture reference. Accepts a book, chapter, verse, or verse range, e.g. Romans, Romans 8, Romans 8:28, or Romans 8:28-30. Verse searches match overlapping stored passage ranges."
 end
 
 defp parameter_description(_name), do: nil

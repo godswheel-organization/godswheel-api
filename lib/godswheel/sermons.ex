@@ -2,7 +2,7 @@ defmodule GodsWheel.Sermons do
   import Ecto.Query, warn: false
 
   alias GodsWheel.Repo
-  alias GodsWheel.Sermons.{Category, Sermon, Speaker}
+  alias GodsWheel.Sermons.{Category, Scripture, Sermon, Speaker}
 
   @default_limit 20
   @max_limit 100
@@ -30,6 +30,7 @@ defmodule GodsWheel.Sermons do
 
       query =
         from sermon in Sermon,
+          as: :sermon,
           where: not is_nil(sermon.published_at) and sermon.published_at <= ^now,
           select: struct(sermon, ^@sermon_summary_fields),
           preload: [
@@ -59,7 +60,7 @@ defmodule GodsWheel.Sermons do
              where:
                sermon.id == ^id and not is_nil(sermon.published_at) and
                  sermon.published_at <= ^now,
-             preload: [:speaker, :categories]
+             preload: [:speaker, :categories, :scriptures]
          ) do
       nil -> {:error, :not_found}
       sermon -> {:ok, sermon}
@@ -105,14 +106,15 @@ defmodule GodsWheel.Sermons do
   defp sermon_filters(params) do
     with {:ok, category_id} <- optional_uuid(params, "category_id"),
          {:ok, speaker_id} <- optional_uuid(params, "speaker_id"),
-         {:ok, sort} <- sort_option(params) do
+         {:ok, sort} <- sort_option(params),
+         {:ok, scripture} <- scripture_filter(params["scripture"]) do
       {:ok,
        %{
          search: normalized_search(params["search"]),
          search_in: search_fields(params["search_in"]),
          category_id: category_id,
          speaker_id: speaker_id,
-         scripture: normalized_search(params["scripture"]),
+         scripture: scripture,
          language: normalized_search(params["language"]),
          sort: sort
        }}
@@ -175,9 +177,103 @@ defmodule GodsWheel.Sermons do
 
   defp maybe_filter_scripture(query, nil), do: query
 
-  defp maybe_filter_scripture(query, scripture) do
-    where(query, [sermon], ilike(sermon.scripture_reference, ^"%#{scripture}%"))
+  defp maybe_filter_scripture(query, scripture_filter) do
+    scripture_query =
+      from scripture in Scripture,
+        join: association in "sermon_scriptures",
+        on: field(association, :scripture_id) == scripture.id,
+        where: field(association, :sermon_id) == parent_as(:sermon).id
+
+    scripture_query =
+      scripture_query
+      |> where([scripture], fragment("lower(?) = lower(?)", scripture.book, ^scripture_filter.book))
+      |> maybe_filter_scripture_chapter(scripture_filter.chapter)
+      |> maybe_filter_scripture_verses(scripture_filter.start_verse, scripture_filter.end_verse)
+
+    where(query, [sermon: _sermon], exists(subquery(scripture_query)))
   end
+
+  defp maybe_filter_scripture_chapter(query, nil), do: query
+
+  defp maybe_filter_scripture_chapter(query, chapter) do
+    where(query, [scripture], scripture.chapter == ^chapter)
+  end
+
+  defp maybe_filter_scripture_verses(query, nil, nil), do: query
+
+  defp maybe_filter_scripture_verses(query, start_verse, end_verse) do
+    where(
+      query,
+      [scripture],
+      scripture.start_verse <= ^end_verse and scripture.end_verse >= ^start_verse
+    )
+  end
+
+  defp scripture_filter(nil), do: {:ok, nil}
+
+  defp scripture_filter(value) when is_binary(value) do
+    value = String.trim(value)
+
+    case Regex.named_captures(
+           ~r/^(?<book>.+?)\s+(?<chapter>\d+)(?::(?<start_verse>\d+)(?:\s*-\s*(?<end_verse>\d+))?)?$/,
+           value
+         ) do
+      %{"book" => book, "chapter" => chapter} = captures ->
+        parse_scripture_parts(
+          book,
+          chapter,
+          empty_to_nil(captures["start_verse"]),
+          empty_to_nil(captures["end_verse"])
+        )
+
+      nil when value != "" ->
+        if String.match?(value, ~r/\d/) do
+          {:error, {:invalid_filter, "scripture"}}
+        else
+          {:ok, %{book: value, chapter: nil, start_verse: nil, end_verse: nil}}
+        end
+
+      _ ->
+        {:ok, nil}
+    end
+  end
+
+  defp scripture_filter(_value), do: {:error, {:invalid_filter, "scripture"}}
+
+  defp parse_scripture_parts(book, chapter, start_verse, end_verse) do
+    with true <- String.trim(book) != "",
+         {chapter, ""} <- Integer.parse(chapter),
+         true <- chapter > 0,
+         {:ok, start_verse} <- optional_positive_integer(start_verse),
+         {:ok, end_verse} <- optional_positive_integer(end_verse),
+         true <- is_nil(end_verse) or (not is_nil(start_verse) and end_verse >= start_verse) do
+      {:ok,
+       %{
+         book: String.trim(book),
+         chapter: chapter,
+         start_verse: start_verse,
+         end_verse: end_verse || start_verse
+       }
+       |> then(fn filter ->
+         if is_nil(start_verse), do: %{filter | end_verse: nil}, else: filter
+       end)}
+    else
+      _ -> {:error, {:invalid_filter, "scripture"}}
+    end
+  end
+
+  defp optional_positive_integer(nil), do: {:ok, nil}
+
+  defp optional_positive_integer(value) do
+    case Integer.parse(value) do
+      {integer, ""} when integer > 0 -> {:ok, integer}
+      _ -> {:error, :invalid_integer}
+    end
+  end
+
+  defp empty_to_nil(nil), do: nil
+  defp empty_to_nil(""), do: nil
+  defp empty_to_nil(value), do: value
 
   defp maybe_filter_language(query, nil), do: query
 
@@ -247,7 +343,7 @@ defmodule GodsWheel.Sermons do
   defp normalized_search(value) when is_binary(value) do
     case String.trim(value) do
       "" -> nil
-      search -> search
+      search_term -> search_term
     end
   end
 
