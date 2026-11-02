@@ -47,6 +47,13 @@ defmodule GodsWheelWeb.Router do
     get "/auth/me", AuthController, :me
     post "/auth/logout", AuthController, :logout
     post "/auth/logout-all", AuthController, :logout_all
+    get "/sermons/:id/progress", Sermon.SermonUserController, :progress
+    put "/sermons/:id/progress", Sermon.SermonUserController, :save_progress
+    get "/sermons/:id/note", Sermon.SermonUserController, :note
+    patch "/sermons/:id/note", Sermon.SermonUserController, :save_note
+    post "/sermons/:id/bookmark", Sermon.SermonUserController, :create_bookmark
+    delete "/sermons/:id/bookmark", Sermon.SermonUserController, :delete_bookmark
+    get "/sermon-bookmarks", Sermon.SermonUserController, :bookmarks
   end
 
   scope "/api/v1/auth", GodsWheelWeb do

@@ -142,6 +142,125 @@ defmodule GodsWheelWeb.OpenApiController do
               "SpeakerListResponse"
             )
         },
+        "/api/v1/sermons/{id}/progress" => %{
+          get: %{
+            tags: ["Sermons"],
+            summary: "Get sermon playback progress",
+            security: [%{BearerAuth: []}],
+            parameters: [
+              %{name: "id", in: "path", required: true, schema: %{type: "string", format: "uuid"}}
+            ],
+            responses: %{
+              "200" =>
+                response(
+                  "Playback progress, or null when no progress has been saved.",
+                  "ProgressResponse"
+                ),
+              "401" => response("Authentication required.", "ErrorResponse"),
+              "404" => response("Sermon not found.", "ErrorResponse")
+            }
+          },
+          put: %{
+            tags: ["Sermons"],
+            summary: "Save sermon playback progress",
+            security: [%{BearerAuth: []}],
+            parameters: [
+              %{name: "id", in: "path", required: true, schema: %{type: "string", format: "uuid"}}
+            ],
+            requestBody: %{
+              required: true,
+              content: %{"application/json" => %{schema: ref_schema("ProgressRequest")}}
+            },
+            responses: %{
+              "200" => response("Playback progress saved.", "ProgressResponse"),
+              "401" => response("Authentication required.", "ErrorResponse"),
+              "404" => response("Sermon not found.", "ErrorResponse"),
+              "422" => response("Invalid playback position.", "ErrorResponse")
+            }
+          }
+        },
+        "/api/v1/sermons/{id}/note" => %{
+          get: %{
+            tags: ["Sermons"],
+            summary: "Get the authenticated user's sermon note",
+            security: [%{BearerAuth: []}],
+            parameters: [
+              %{name: "id", in: "path", required: true, schema: %{type: "string", format: "uuid"}}
+            ],
+            responses: %{
+              "200" => response("The user's note, or null when no note exists.", "NoteResponse"),
+              "401" => response("Authentication required.", "ErrorResponse"),
+              "404" => response("Sermon not found.", "ErrorResponse")
+            }
+          },
+          patch: %{
+            tags: ["Sermons"],
+            summary: "Create or update the authenticated user's sermon note",
+            security: [%{BearerAuth: []}],
+            parameters: [
+              %{name: "id", in: "path", required: true, schema: %{type: "string", format: "uuid"}}
+            ],
+            requestBody: %{
+              required: true,
+              content: %{"application/json" => %{schema: ref_schema("NoteRequest")}}
+            },
+            responses: %{
+              "200" => response("Sermon note saved.", "NoteResponse"),
+              "401" => response("Authentication required.", "ErrorResponse"),
+              "404" => response("Sermon not found.", "ErrorResponse"),
+              "422" => response("Invalid note content.", "ErrorResponse")
+            }
+          }
+        },
+        "/api/v1/sermons/{id}/bookmark" => %{
+          post: %{
+            tags: ["Sermons"],
+            summary: "Bookmark a sermon",
+            security: [%{BearerAuth: []}],
+            parameters: [
+              %{name: "id", in: "path", required: true, schema: %{type: "string", format: "uuid"}}
+            ],
+            responses: %{
+              "201" => response("Sermon bookmarked.", "MessageResponse"),
+              "401" => response("Authentication required.", "ErrorResponse"),
+              "404" => response("Sermon not found.", "ErrorResponse")
+            }
+          },
+          delete: %{
+            tags: ["Sermons"],
+            summary: "Remove a sermon bookmark",
+            security: [%{BearerAuth: []}],
+            parameters: [
+              %{name: "id", in: "path", required: true, schema: %{type: "string", format: "uuid"}}
+            ],
+            responses: %{
+              "200" => response("Bookmark removed.", "MessageResponse"),
+              "401" => response("Authentication required.", "ErrorResponse"),
+              "404" => response("Bookmark not found.", "ErrorResponse")
+            }
+          }
+        },
+        "/api/v1/sermon-bookmarks" => %{
+          get:
+            catalogue_operation(
+              "Sermons",
+              "List bookmarked sermons",
+              "Returns the authenticated user's bookmarked published sermons. Supports the same search, filters, sorting, and pagination as the public sermon catalogue.",
+              [
+                "search",
+                "search_in[]",
+                "category_id",
+                "speaker_id",
+                "scripture",
+                "language",
+                "sort",
+                "page",
+                "limit"
+              ],
+              "SermonListResponse"
+            )
+            |> Map.put(:security, [%{BearerAuth: []}])
+        },
         "/api/v1/health" => %{
           get: %{
             tags: ["Health"],
@@ -383,6 +502,54 @@ defmodule GodsWheelWeb.OpenApiController do
                 meta: ref_schema("PaginationMeta")
               },
               ["success", "data", "meta"]
+            ),
+          ProgressRequest:
+            object_schema(
+              %{position_seconds: %{type: "integer", minimum: 0}},
+              ["position_seconds"]
+            ),
+          ProgressResponse:
+            object_schema(
+              %{
+                success: %{type: "boolean", enum: [true]},
+                data: %{
+                  oneOf: [
+                    object_schema(
+                      %{
+                        sermonId: %{type: "string", format: "uuid"},
+                        positionSeconds: %{type: "integer", minimum: 0},
+                        updatedAt: %{type: "string", format: "date-time"}
+                      },
+                      ["sermonId", "positionSeconds", "updatedAt"]
+                    ),
+                    %{type: "null"}
+                  ]
+                }
+              },
+              ["success", "data"]
+            ),
+          NoteRequest:
+            object_schema(%{content: %{type: "string"}}, ["content"]),
+          NoteResponse:
+            object_schema(
+              %{
+                success: %{type: "boolean", enum: [true]},
+                data: %{
+                  oneOf: [
+                    object_schema(
+                      %{
+                        sermonId: %{type: "string", format: "uuid"},
+                        content: %{type: "string"},
+                        insertedAt: %{type: "string", format: "date-time"},
+                        updatedAt: %{type: "string", format: "date-time"}
+                      },
+                      ["sermonId", "content", "insertedAt", "updatedAt"]
+                    ),
+                    %{type: "null"}
+                  ]
+                }
+              },
+              ["success", "data"]
             ),
           SermonResponse:
             object_schema(

@@ -2,7 +2,15 @@ defmodule GodsWheel.Sermons do
   import Ecto.Query, warn: false
 
   alias GodsWheel.Repo
-  alias GodsWheel.Sermons.{Category, Scripture, Sermon, Speaker}
+  alias GodsWheel.Sermons.{
+    Category,
+    Scripture,
+    Sermon,
+    SermonBookmark,
+    SermonNote,
+    SermonProgress,
+    Speaker
+  }
 
   @default_limit 20
   @max_limit 100
@@ -16,31 +24,145 @@ defmodule GodsWheel.Sermons do
     :speaker_id
   ]
   def list_sermons(params \\ %{}) do
+    list_sermons_query(published_sermons_query(), params)
+  end
+
+  def list_bookmarked_sermons(user_id, params \\ %{}) do
+    bookmark_query =
+      from bookmark in SermonBookmark,
+        where:
+          bookmark.user_id == ^user_id and
+            bookmark.sermon_id == parent_as(:sermon).id
+
+    query =
+      published_sermons_query()
+      |> where([sermon: _sermon], exists(subquery(bookmark_query)))
+
+    list_sermons_query(query, params)
+  end
+
+  def get_sermon_progress(user_id, sermon_id) do
+    with {:ok, sermon_id} <- cast_uuid(sermon_id),
+         true <- published_sermon?(sermon_id) do
+      progress =
+        Repo.one(
+          from progress in SermonProgress,
+            where: progress.user_id == ^user_id and progress.sermon_id == ^sermon_id
+        )
+
+      {:ok, progress}
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def save_sermon_progress(user_id, sermon_id, position_seconds)
+      when is_integer(position_seconds) and position_seconds >= 0 do
+    with {:ok, sermon_id} <- cast_uuid(sermon_id),
+         true <- published_sermon?(sermon_id) do
+      now = DateTime.utc_now()
+
+      %SermonProgress{user_id: user_id, sermon_id: sermon_id}
+      |> SermonProgress.changeset(%{position_seconds: position_seconds})
+      |> Repo.insert(
+        on_conflict: [set: [position_seconds: position_seconds, updated_at: now]],
+        conflict_target: [:user_id, :sermon_id],
+        returning: true
+      )
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def save_sermon_progress(_user_id, _sermon_id, _position_seconds),
+    do: {:error, :invalid_position}
+
+  def get_sermon_note(user_id, sermon_id) do
+    with {:ok, sermon_id} <- cast_uuid(sermon_id),
+         true <- published_sermon?(sermon_id) do
+      note =
+        Repo.one(
+          from note in SermonNote,
+            where: note.user_id == ^user_id and note.sermon_id == ^sermon_id
+        )
+
+      {:ok, note}
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def save_sermon_note(user_id, sermon_id, content) when is_binary(content) do
+    with {:ok, sermon_id} <- cast_uuid(sermon_id),
+         true <- published_sermon?(sermon_id) do
+      now = DateTime.utc_now()
+
+      %SermonNote{user_id: user_id, sermon_id: sermon_id}
+      |> SermonNote.changeset(%{content: content})
+      |> Repo.insert(
+        on_conflict: [set: [content: content, updated_at: now]],
+        conflict_target: [:user_id, :sermon_id],
+        returning: true
+      )
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def save_sermon_note(_user_id, _sermon_id, _content), do: {:error, :invalid_content}
+
+  def create_sermon_bookmark(user_id, sermon_id) do
+    with {:ok, sermon_id} <- cast_uuid(sermon_id),
+         true <- published_sermon?(sermon_id) do
+      %SermonBookmark{user_id: user_id, sermon_id: sermon_id}
+      |> Ecto.Changeset.change()
+      |> Repo.insert(on_conflict: :nothing, conflict_target: [:user_id, :sermon_id])
+      |> case do
+        {:ok, _bookmark} -> :ok
+        error -> error
+      end
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def delete_sermon_bookmark(user_id, sermon_id) do
+    with {:ok, sermon_id} <- cast_uuid(sermon_id) do
+      {count, _} =
+        Repo.delete_all(
+          from bookmark in SermonBookmark,
+            where: bookmark.user_id == ^user_id and bookmark.sermon_id == ^sermon_id
+        )
+
+      if count > 0, do: :ok, else: {:error, :not_found}
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  defp published_sermons_query do
     now = DateTime.utc_now()
 
+    speaker_query =
+      from speaker in Speaker,
+        select: struct(speaker, [:id, :name])
+
+    category_query =
+      from category in Category,
+        select: struct(category, [:id, :name, :slug])
+
+    from sermon in Sermon,
+      as: :sermon,
+      where: not is_nil(sermon.published_at) and sermon.published_at <= ^now,
+      select: struct(sermon, ^@sermon_summary_fields),
+      preload: [speaker: ^speaker_query, categories: ^category_query]
+  end
+
+  defp list_sermons_query(query, params) do
     with {:ok, pagination} <- pagination(params),
          {:ok, filters} <- sermon_filters(params) do
-      speaker_query =
-        from speaker in Speaker,
-          select: struct(speaker, [:id, :name])
-
-      category_query =
-        from category in Category,
-          select: struct(category, [:id, :name, :slug])
-
-      query =
-        from sermon in Sermon,
-          as: :sermon,
-          where: not is_nil(sermon.published_at) and sermon.published_at <= ^now,
-          select: struct(sermon, ^@sermon_summary_fields),
-          preload: [
-            speaker: ^speaker_query,
-            categories: ^category_query
-          ]
-
       query = apply_sermon_filters(query, filters)
       query = order_sermons(query, filters.sort)
-
       total_entries = count_entries(query)
 
       entries =
@@ -52,6 +174,20 @@ defmodule GodsWheel.Sermons do
       {:ok, %{entries: entries, meta: pagination_meta(pagination, total_entries)}}
     end
   end
+
+  defp published_sermon?(sermon_id) do
+    now = DateTime.utc_now()
+
+    Repo.exists?(
+      from sermon in Sermon,
+        where:
+          sermon.id == ^sermon_id and not is_nil(sermon.published_at) and
+            sermon.published_at <= ^now
+    )
+  end
+
+  defp cast_uuid(value) when is_binary(value), do: Ecto.UUID.cast(value)
+  defp cast_uuid(_value), do: :error
 
   def get_sermon(id) when is_binary(id) do
     now = DateTime.utc_now()
