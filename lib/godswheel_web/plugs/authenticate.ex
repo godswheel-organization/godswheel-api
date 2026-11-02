@@ -20,9 +20,7 @@ defmodule GodsWheelWeb.Plugs.Authenticate do
         |> put_resp_content_type("application/json")
         |> send_resp(
           :unauthorized,
-          Jason.encode!(
-            Response.error("authentication_required", "Authentication required.")
-          )
+          Jason.encode!(Response.error("authentication_required", "Authentication required."))
         )
         |> halt()
     end

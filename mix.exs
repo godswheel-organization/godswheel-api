@@ -48,6 +48,8 @@ defmodule GodsWheel.MixProject do
       {:gen_smtp, "~> 1.2"},
       {:bcrypt_elixir, "~> 3.2"},
       {:req, "~> 0.5"},
+      {:ex_aws, "~> 2.5"},
+      {:ex_aws_s3, "~> 2.5"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:gettext, "~> 1.0"},

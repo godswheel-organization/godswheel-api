@@ -30,6 +30,7 @@ defmodule GodsWheelWeb.Router do
     get "/health", HealthController, :show
     get "/sermons", Sermon.SermonController, :index
     get "/sermons/:id", Sermon.SermonController, :show
+    get "/sermons/:id/audio", Sermon.SermonController, :audio
     get "/categories", Sermon.CategoryController, :index
     get "/speakers", Sermon.SpeakerController, :index
     post "/auth/signup", AuthController, :signup

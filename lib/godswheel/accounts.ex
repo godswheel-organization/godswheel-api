@@ -81,6 +81,7 @@ defmodule GodsWheel.Accounts do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
     refresh_token = generate_token()
     absolute_expires_at = DateTime.add(now, session_absolute_ttl_seconds(), :second)
+
     expires_at =
       min_datetime(DateTime.add(now, session_idle_ttl_seconds(), :second), absolute_expires_at)
 
@@ -121,6 +122,7 @@ defmodule GodsWheel.Accounts do
 
       user = Repo.get!(User, session.user_id)
       new_refresh_token = generate_token()
+
       new_expires_at =
         min_datetime(
           DateTime.add(now, session_idle_ttl_seconds(), :second),
@@ -250,7 +252,9 @@ defmodule GodsWheel.Accounts do
         case token do
           {:ok, raw_token} ->
             case deliver_verification_email(user, raw_token) do
-              :ok -> :ok
+              :ok ->
+                :ok
+
               {:error, reason} ->
                 Logger.error("Unable to deliver email verification: #{inspect(reason)}")
                 invalidate_verification_token(raw_token)
@@ -376,7 +380,9 @@ defmodule GodsWheel.Accounts do
     case result do
       {:ok, _reset_token} ->
         case deliver_password_reset_email(user, raw_token) do
-          :ok -> :ok
+          :ok ->
+            :ok
+
           {:error, reason} ->
             Logger.error("Unable to deliver password reset email: #{inspect(reason)}")
 

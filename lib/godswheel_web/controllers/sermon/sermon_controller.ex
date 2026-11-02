@@ -2,6 +2,7 @@ defmodule GodsWheelWeb.Sermon.SermonController do
   use GodsWheelWeb, :controller
 
   alias GodsWheel.Sermons
+  alias GodsWheel.Storage.Tigris
   alias GodsWheelWeb.Response
   alias GodsWheelWeb.Sermon.SermonJSON
 
@@ -22,6 +23,32 @@ defmodule GodsWheelWeb.Sermon.SermonController do
 
       {:error, :not_found} ->
         Response.send_error(conn, :not_found, "sermon_not_found", "Sermon not found.")
+    end
+  end
+
+  def audio(conn, %{"id" => id}) do
+    with {:ok, audio_key} <- Sermons.get_sermon_audio(id),
+         {:ok, playback} <- Tigris.playback_url(audio_key) do
+      conn
+      |> put_resp_header("cache-control", "no-store")
+      |> json(Response.success(playback))
+    else
+      {:error, :not_found} ->
+        Response.send_error(conn, :not_found, "sermon_not_found", "Sermon not found.")
+
+      {:error, :audio_not_found} ->
+        Response.send_error(conn, :not_found, "audio_not_found", "Audio is not available.")
+
+      {:error, :storage_not_configured} ->
+        Response.send_error(
+          conn,
+          :service_unavailable,
+          "audio_storage_unavailable",
+          "Audio playback is temporarily unavailable."
+        )
+
+      {:error, :invalid_audio_key} ->
+        Response.send_error(conn, :not_found, "audio_not_found", "Audio is not available.")
     end
   end
 

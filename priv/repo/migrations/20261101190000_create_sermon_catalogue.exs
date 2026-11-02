@@ -27,6 +27,7 @@ defmodule GodsWheel.Repo.Migrations.CreateSermonCatalogue do
 
     create table(:sermons, primary_key: false) do
       add :id, :binary_id, primary_key: true
+
       add :speaker_id,
           references(:speakers, type: :binary_id, on_delete: :restrict),
           null: false

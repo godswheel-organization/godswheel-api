@@ -10,8 +10,7 @@ defmodule GodsWheelWeb.PasswordResetController do
     json(
       conn,
       Response.success(%{
-        message:
-          "If an account exists for that email, password reset instructions will be sent."
+        message: "If an account exists for that email, password reset instructions will be sent."
       })
     )
   end

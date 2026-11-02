@@ -203,6 +203,15 @@ if config_env() in [:prod, :staging] do
   # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
 end
 
+config :godswheel, :tigris,
+  bucket: System.get_env("TIGRIS_BUCKET"),
+  access_key_id: System.get_env("AWS_ACCESS_KEY_ID"),
+  secret_access_key: System.get_env("AWS_SECRET_ACCESS_KEY"),
+  session_token: System.get_env("AWS_SESSION_TOKEN"),
+  endpoint: System.get_env("TIGRIS_ENDPOINT", "https://t3.storage.dev"),
+  region: System.get_env("AWS_REGION", "auto"),
+  url_ttl_seconds: String.to_integer(System.get_env("AUDIO_URL_TTL_SECONDS", "14400"))
+
 if System.get_env("PHX_SERVER") do
   config :godswheel, GodsWheelWeb.Endpoint, server: true
 end

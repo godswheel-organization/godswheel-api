@@ -24,9 +24,7 @@ defmodule GodsWheel.Repo.Migrations.OptimizeSermonSearchIndexes do
   end
 
   def down do
-    drop index(:sermons, [:published_at],
-           name: :sermons_published_at_index
-         )
+    drop index(:sermons, [:published_at], name: :sermons_published_at_index)
 
     execute "DROP INDEX IF EXISTS sermons_title_trgm_index"
     execute "DROP INDEX IF EXISTS sermons_description_trgm_index"

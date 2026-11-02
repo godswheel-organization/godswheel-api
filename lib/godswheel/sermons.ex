@@ -42,6 +42,7 @@ defmodule GodsWheel.Sermons do
       query = order_sermons(query, filters.sort)
 
       total_entries = count_entries(query)
+
       entries =
         query
         |> limit(^pagination.limit)
@@ -69,9 +70,33 @@ defmodule GodsWheel.Sermons do
 
   def get_sermon(_id), do: {:error, :not_found}
 
+  def get_sermon_audio(id) when is_binary(id) do
+    now = DateTime.utc_now()
+
+    case Repo.one(
+           from sermon in Sermon,
+             where:
+               sermon.id == ^id and not is_nil(sermon.published_at) and
+                 sermon.published_at <= ^now,
+             select: sermon.audio_url
+         ) do
+      nil ->
+        {:error, :not_found}
+
+      audio_key when is_binary(audio_key) ->
+        if String.trim(audio_key) == "" do
+          {:error, :audio_not_found}
+        else
+          {:ok, audio_key}
+        end
+    end
+  end
+
+  def get_sermon_audio(_id), do: {:error, :not_found}
+
   def list_categories(params \\ %{}) do
     with {:ok, pagination} <- pagination(params) do
-      query = from category in Category
+      query = from(category in Category)
       query = apply_name_search(query, params)
       total_entries = Repo.aggregate(query, :count, :id)
 
@@ -88,7 +113,7 @@ defmodule GodsWheel.Sermons do
 
   def list_speakers(params \\ %{}) do
     with {:ok, pagination} <- pagination(params) do
-      query = from speaker in Speaker
+      query = from(speaker in Speaker)
       query = apply_name_search(query, params)
       total_entries = Repo.aggregate(query, :count, :id)
 
@@ -173,7 +198,9 @@ defmodule GodsWheel.Sermons do
   end
 
   defp maybe_filter_speaker(query, nil), do: query
-  defp maybe_filter_speaker(query, speaker_id), do: where(query, [sermon], sermon.speaker_id == ^speaker_id)
+
+  defp maybe_filter_speaker(query, speaker_id),
+    do: where(query, [sermon], sermon.speaker_id == ^speaker_id)
 
   defp maybe_filter_scripture(query, nil), do: query
 
@@ -186,7 +213,10 @@ defmodule GodsWheel.Sermons do
 
     scripture_query =
       scripture_query
-      |> where([scripture], fragment("lower(?) = lower(?)", scripture.book, ^scripture_filter.book))
+      |> where(
+        [scripture],
+        fragment("lower(?) = lower(?)", scripture.book, ^scripture_filter.book)
+      )
       |> maybe_filter_scripture_chapter(scripture_filter.chapter)
       |> maybe_filter_scripture_verses(scripture_filter.start_verse, scripture_filter.end_verse)
 
@@ -321,14 +351,17 @@ defmodule GodsWheel.Sermons do
 
   defp optional_uuid(params, key) do
     case params[key] do
-      nil -> {:ok, nil}
+      nil ->
+        {:ok, nil}
+
       value when is_binary(value) ->
         case Ecto.UUID.cast(value) do
           {:ok, uuid} -> {:ok, uuid}
           :error -> {:error, {:invalid_filter, key}}
         end
 
-      _ -> {:error, {:invalid_filter, key}}
+      _ ->
+        {:error, {:invalid_filter, key}}
     end
   end
 

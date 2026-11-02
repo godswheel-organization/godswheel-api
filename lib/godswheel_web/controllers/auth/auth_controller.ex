@@ -104,8 +104,7 @@ defmodule GodsWheelWeb.AuthController do
                 access_token: access_token,
                 token_type: "Bearer",
                 expires_in: JWT.ttl_seconds(),
-                expires_at:
-                  DateTime.from_unix!(claims["exp"], :second) |> DateTime.to_iso8601()
+                expires_at: DateTime.from_unix!(claims["exp"], :second) |> DateTime.to_iso8601()
               })
             )
 
