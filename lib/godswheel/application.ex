@@ -10,6 +10,7 @@ defmodule GodsWheel.Application do
     children = [
       GodsWheelWeb.Telemetry,
       GodsWheel.Repo,
+      GodsWheel.Sermons.ProgressBuffer,
       {DNSCluster, query: Application.get_env(:godswheel, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: GodsWheel.PubSub},
       # Start a worker by calling: GodsWheel.Worker.start_link(arg)

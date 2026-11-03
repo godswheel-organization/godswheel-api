@@ -9,6 +9,7 @@ defmodule GodsWheel.Sermons.SermonProgress do
     belongs_to :user, GodsWheel.Accounts.User
     belongs_to :sermon, GodsWheel.Sermons.Sermon
     field :position_seconds, :integer, default: 0
+    field :position_updated_at, :utc_datetime_usec
 
     timestamps(type: :utc_datetime_usec)
   end

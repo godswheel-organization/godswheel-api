@@ -2,6 +2,7 @@ defmodule GodsWheel.Sermons do
   import Ecto.Query, warn: false
 
   alias GodsWheel.Repo
+
   alias GodsWheel.Sermons.{
     Category,
     Scripture,
@@ -9,7 +10,8 @@ defmodule GodsWheel.Sermons do
     SermonBookmark,
     SermonNote,
     SermonProgress,
-    Speaker
+    Speaker,
+    ProgressBuffer
   }
 
   @default_limit 20
@@ -60,15 +62,7 @@ defmodule GodsWheel.Sermons do
       when is_integer(position_seconds) and position_seconds >= 0 do
     with {:ok, sermon_id} <- cast_uuid(sermon_id),
          true <- published_sermon?(sermon_id) do
-      now = DateTime.utc_now()
-
-      %SermonProgress{user_id: user_id, sermon_id: sermon_id}
-      |> SermonProgress.changeset(%{position_seconds: position_seconds})
-      |> Repo.insert(
-        on_conflict: [set: [position_seconds: position_seconds, updated_at: now]],
-        conflict_target: [:user_id, :sermon_id],
-        returning: true
-      )
+      ProgressBuffer.put(user_id, sermon_id, position_seconds)
     else
       _ -> {:error, :not_found}
     end

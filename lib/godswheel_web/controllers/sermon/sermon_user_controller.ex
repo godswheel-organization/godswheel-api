@@ -121,6 +121,7 @@ defmodule GodsWheelWeb.Sermon.SermonUserController do
     %{
       sermon_id: progress.sermon_id,
       position_seconds: progress.position_seconds,
+      position_updated_at: progress.position_updated_at,
       updated_at: progress.updated_at
     }
   end
