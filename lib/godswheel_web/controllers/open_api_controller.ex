@@ -277,7 +277,7 @@ defmodule GodsWheelWeb.OpenApiController do
             operation(
               "Authentication",
               "Register an account",
-              "Creates an unverified account and sends an email verification link. No access token is issued until the email address is verified.",
+              "Creates an unverified account and sends an email verification link. accepted_terms must be the boolean true. No access token is issued until the email address is verified.",
               "SignupRequest",
               %{
                 "201" => response("Account created; verification email sent.", "SignupResponse"),
@@ -597,9 +597,14 @@ defmodule GodsWheelWeb.OpenApiController do
                 full_name: string_schema("User's full name", minLength: 2, maxLength: 120),
                 email: string_schema("Email address", format: "email", maxLength: 254),
                 password:
-                  string_schema("Password; 8 to 72 characters", minLength: 8, maxLength: 72)
+                  string_schema("Password; 8 to 72 characters", minLength: 8, maxLength: 72),
+                accepted_terms: %{
+                  type: "boolean",
+                  enum: [true],
+                  description: "Must be true to accept the Terms and Privacy Notice."
+                }
               },
-              ["full_name", "email", "password"]
+              ["full_name", "email", "password", "accepted_terms"]
             ),
           SignupResponse:
             object_schema(

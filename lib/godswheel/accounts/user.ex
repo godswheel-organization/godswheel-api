@@ -11,13 +11,15 @@ defmodule GodsWheel.Accounts.User do
     field :password, :string, virtual: true, redact: true
     field :password_hash, :string, redact: true
     field :email_verified_at, :utc_datetime_usec
+    field :accepted_terms, :boolean, virtual: true
 
     timestamps(type: :utc_datetime_usec)
   end
 
   def registration_changeset(user, attrs) do
     user
-    |> cast(attrs, [:full_name, :email, :password])
+    |> cast(attrs, [:full_name, :email, :password, :accepted_terms])
+    |> validate_terms_acceptance(attrs)
     |> update_change(:full_name, &String.trim/1)
     |> update_change(:email, &(&1 |> String.trim() |> String.downcase()))
     |> validate_required([:full_name, :email, :password])
@@ -28,6 +30,16 @@ defmodule GodsWheel.Accounts.User do
     |> validate_password_byte_length()
     |> unique_constraint(:email)
     |> put_password_hash()
+  end
+
+  defp validate_terms_acceptance(changeset, attrs) do
+    accepted_terms = Map.get(attrs, :accepted_terms, Map.get(attrs, "accepted_terms"))
+
+    if accepted_terms === true do
+      changeset
+    else
+      add_error(changeset, :accepted_terms, "must be accepted")
+    end
   end
 
   def password_changeset(user, attrs) do
