@@ -28,6 +28,7 @@ defmodule GodsWheelWeb.Router do
     pipe_through :api
 
     get "/health", HealthController, :show
+    get "/health/live", HealthController, :live
     get "/sermons", Sermon.SermonController, :index
     get "/sermons/:id", Sermon.SermonController, :show
     get "/sermons/:id/audio", Sermon.SermonController, :audio

@@ -24,7 +24,11 @@ defmodule GodsWheel.Sermons.ProgressBuffer do
       Keyword.get(
         opts,
         :flush_interval_ms,
-        Application.get_env(:godswheel, :sermon_progress_flush_interval_ms, @default_flush_interval_ms)
+        Application.get_env(
+          :godswheel,
+          :sermon_progress_flush_interval_ms,
+          @default_flush_interval_ms
+        )
       )
 
     schedule_flush(interval)

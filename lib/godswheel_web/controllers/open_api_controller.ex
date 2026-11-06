@@ -264,11 +264,23 @@ defmodule GodsWheelWeb.OpenApiController do
         "/api/v1/health" => %{
           get: %{
             tags: ["Health"],
-            summary: "Check API health",
+            summary: "Check API readiness",
             description:
-              "Returns the basic application health status. This endpoint does not expose dependency or infrastructure details.",
+              "Checks whether the application can serve requests by verifying that PostgreSQL responds to a lightweight query. Returns 503 when the database is unavailable.",
             responses: %{
-              "200" => response("The API is healthy.", "HealthResponse")
+              "200" => response("The API and its database are healthy.", "HealthResponse"),
+              "503" => response("A required dependency is unavailable.", "ErrorResponse")
+            }
+          }
+        },
+        "/api/v1/health/live" => %{
+          get: %{
+            tags: ["Health"],
+            summary: "Check API liveness",
+            description:
+              "Checks whether the application process is responsive. This check does not depend on PostgreSQL.",
+            responses: %{
+              "200" => response("The application is alive.", "HealthResponse")
             }
           }
         },
@@ -528,8 +540,7 @@ defmodule GodsWheelWeb.OpenApiController do
               },
               ["success", "data"]
             ),
-          NoteRequest:
-            object_schema(%{content: %{type: "string"}}, ["content"]),
+          NoteRequest: object_schema(%{content: %{type: "string"}}, ["content"]),
           NoteResponse:
             object_schema(
               %{
@@ -584,9 +595,17 @@ defmodule GodsWheelWeb.OpenApiController do
                 data:
                   object_schema(
                     %{
-                      status: %{type: "string", enum: ["ok"]}
+                      status: %{type: "string", enum: ["ok"]},
+                      checks:
+                        object_schema(
+                          %{
+                            application: %{type: "string", enum: ["ok"]},
+                            database: %{type: "string", enum: ["ok"]}
+                          },
+                          ["application"]
+                        )
                     },
-                    ["status"]
+                    ["status", "checks"]
                   )
               },
               ["success", "data"]
