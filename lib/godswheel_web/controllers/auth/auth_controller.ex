@@ -48,15 +48,20 @@ defmodule GodsWheelWeb.AuthController do
           "current_password" => current_password,
           "new_password" => new_password
         }
-      ) do
-    case Accounts.change_password(conn.assigns.current_user.id, current_password, new_password) do
+      )
+      when is_binary(current_password) and is_binary(new_password) do
+    case Accounts.change_password(
+           conn.assigns.current_user.id,
+           conn.assigns.current_session_id,
+           current_password,
+           new_password
+         ) do
       {:ok, _updated_user} ->
         Response.send_success(
           conn,
-          :updated,
+          :ok,
           %{
-            message:
-              "Your password was successfully changed. Remember to use your new password in your next login"
+            message: "Your password was successfully changed. Other active sessions have been logged out."
           }
         )
 
@@ -65,28 +70,45 @@ defmodule GodsWheelWeb.AuthController do
           conn,
           :not_found,
           "not_found",
-          "user not found",
-          "Check that your session is still valid"
+          "User not found.",
+          "Check that your session is still valid."
         )
 
       {:error, :wrong_credentials} ->
         Response.send_error(
           conn,
           :forbidden,
-          "validation_error",
-          "wrong credentials",
-          "You must enter your current password correctly"
+          "wrong_credentials",
+          "The current password is incorrect.",
+          "Enter your current password correctly and try again."
         )
 
-      _ ->
+      {:error, %Ecto.Changeset{} = changeset} ->
+        Response.send_error(
+          conn,
+          :unprocessable_entity,
+          "validation_error",
+          "The new password does not meet the requirements.",
+          errors_on(changeset)
+        )
+
+      {:error, _reason} ->
         Response.send_error(
           conn,
           :server_error,
-          "network_error",
-          "server error",
-          "Experience some issues during operation, please try again"
+          "password_change_failed",
+          "Unable to change your password right now. Please try again."
         )
     end
+  end
+
+  def change_password(conn, _params) do
+    Response.send_error(
+      conn,
+      :unprocessable_entity,
+      "validation_error",
+      "Both current_password and new_password are required and must be strings."
+    )
   end
 
   def login(conn, %{"email" => identifier, "password" => password}) do

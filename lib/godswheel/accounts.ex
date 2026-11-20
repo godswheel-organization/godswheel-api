@@ -52,24 +52,49 @@ defmodule GodsWheel.Accounts do
     end
   end
 
-  def change_password(id, current_password, new_password) do
-    case get_user(id) do
-      %User{} = user ->
-        old_password_hash = user.password_hash
+  def change_password(id, current_session_id, current_password, new_password)
+      when is_binary(id) and is_binary(current_session_id) and is_binary(current_password) and
+             is_binary(new_password) do
+    Repo.transaction(fn ->
+      case Repo.get(User, id) do
+        %User{} = user ->
+          if Bcrypt.verify_pass(current_password, user.password_hash) do
+            changeset = User.password_changeset(user, %{password: new_password})
 
-        if Bcrypt.verify_pass(current_password, old_password_hash) do
-          case User.password_changeset(user, %{password: new_password}) |> Repo.update() do
-            {:ok, updated_user} -> {:ok, updated_user}
-            _ -> {:error, :operation_failed}
+            case Repo.update(changeset) do
+              {:ok, updated_user} ->
+                now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+                Repo.update_all(
+                  from(session in UserSession,
+                    where:
+                      session.user_id == ^user.id and session.id != ^current_session_id and
+                        is_nil(session.revoked_at)
+                  ),
+                  set: [revoked_at: now]
+                )
+
+                updated_user
+
+              {:error, changeset} ->
+                Repo.rollback(changeset)
+            end
+          else
+            Repo.rollback(:wrong_credentials)
           end
-        else
-          {:error, :wrong_credentials}
-        end
 
-      _ ->
-        {:error, :not_found}
+        nil ->
+          Repo.rollback(:not_found)
+      end
+    end)
+    |> case do
+      {:ok, updated_user} -> {:ok, updated_user}
+      {:error, reason} -> {:error, reason}
     end
   end
+
+  def change_password(_id, _session_id, _current_password, _new_password),
+    do: {:error, :invalid_arguments}
 
   def authenticate(email, password)
       when is_binary(email) and is_binary(password) do
@@ -267,29 +292,61 @@ defmodule GodsWheel.Accounts do
 
   def resend_verification_email(email) when is_binary(email) do
     normalized_email = email |> String.trim() |> String.downcase()
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    cooldown_seconds = Application.get_env(:godswheel, :verification_resend_cooldown_seconds, 60)
 
-    case Repo.get_by(User, email: normalized_email) do
-      %User{email_verified_at: nil} = user ->
-        token = create_email_verification_token(user)
+    result =
+      Repo.transaction(fn ->
+        user =
+          Repo.one(
+            from user in User,
+              where: user.email == ^normalized_email,
+              lock: "FOR UPDATE"
+          )
 
-        case token do
-          {:ok, raw_token} ->
-            case deliver_verification_email(user, raw_token) do
-              :ok ->
-                :ok
+        case user do
+          %User{email_verified_at: nil} = unverified_user ->
+            recent_token_at =
+              Repo.one(
+                from token in EmailVerificationToken,
+                  where: token.user_id == ^unverified_user.id,
+                  order_by: [desc: token.inserted_at],
+                  limit: 1,
+                  select: token.inserted_at
+              )
 
-              {:error, reason} ->
-                Logger.error("Unable to deliver email verification: #{inspect(reason)}")
-                invalidate_verification_token(raw_token)
-                :ok
+            if recent_token_at &&
+                 DateTime.diff(now, recent_token_at, :second) < cooldown_seconds do
+              :rate_limited
+            else
+              {unverified_user, create_email_verification_token!(unverified_user)}
             end
 
+          _ ->
+            :not_applicable
+        end
+      end)
+
+    case result do
+      {:ok, {user, raw_token}} ->
+        case deliver_verification_email(user, raw_token) do
+          :ok ->
+            :ok
+
           {:error, reason} ->
-            Logger.error("Unable to create email verification token: #{inspect(reason)}")
+            Logger.error("Unable to deliver email verification: #{inspect(reason)}")
+            invalidate_verification_token(raw_token)
             :ok
         end
 
-      _ ->
+      {:ok, :rate_limited} ->
+        :ok
+
+      {:ok, :not_applicable} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.error("Unable to process verification email request: #{inspect(reason)}")
         :ok
     end
   end
@@ -330,14 +387,6 @@ defmodule GodsWheel.Accounts do
     |> Repo.insert!()
 
     raw_token
-  end
-
-  defp create_email_verification_token(user) do
-    Repo.transaction(fn -> create_email_verification_token!(user) end)
-    |> case do
-      {:ok, token} -> {:ok, token}
-      {:error, reason} -> {:error, reason}
-    end
   end
 
   defp deliver_verification_email(user, token) do

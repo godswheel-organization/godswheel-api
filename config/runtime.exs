@@ -56,7 +56,9 @@ config :godswheel,
   session_idle_ttl_seconds:
     String.to_integer(System.get_env("SESSION_IDLE_TTL_SECONDS", "2592000")),
   session_absolute_ttl_seconds:
-    String.to_integer(System.get_env("SESSION_ABSOLUTE_TTL_SECONDS", "7776000"))
+    String.to_integer(System.get_env("SESSION_ABSOLUTE_TTL_SECONDS", "7776000")),
+  verification_resend_cooldown_seconds:
+    String.to_integer(System.get_env("VERIFICATION_RESEND_COOLDOWN_SECONDS", "60"))
 
 if config_env() in [:prod, :staging] do
   dashboard_username =

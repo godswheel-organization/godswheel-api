@@ -369,7 +369,7 @@ defmodule GodsWheelWeb.OpenApiController do
             operation(
               "Authentication",
               "Resend verification email",
-              "Sends a new verification link when an unverified account exists. The response is generic to avoid account enumeration.",
+              "Sends a new verification link when an unverified account exists. Requests are limited to one per email address per 60-second cooldown by default. The response is generic to avoid account enumeration.",
               "EmailRequest",
               %{
                 "200" => response("Generic confirmation.", "MessageResponse"),
@@ -402,6 +402,30 @@ defmodule GodsWheelWeb.OpenApiController do
                 "422" => response("Invalid, expired token or invalid password.", "ErrorResponse")
               }
             )
+        },
+        "/api/v1/auth/change-password" => %{
+          put: %{
+            tags: ["Authentication"],
+            summary: "Change password",
+            description:
+              "Changes the authenticated user's password after verifying the current password. On success, the current session remains active and all other active sessions are revoked.",
+            security: [%{BearerAuth: []}],
+            requestBody: %{
+              required: true,
+              content: %{
+                "application/json" => %{
+                  schema: ref_schema("ChangePasswordRequest")
+                }
+              }
+            },
+            responses: %{
+              "200" => response("Password changed; other active sessions have been revoked.", "MessageResponse"),
+              "401" => response("Authentication required.", "ErrorResponse"),
+              "403" => response("The current password is incorrect.", "ErrorResponse"),
+              "422" => response("Required fields are missing or the new password is invalid.", "ValidationError"),
+              "500" => response("The password could not be changed due to an unexpected error.", "ErrorResponse")
+            }
+          }
         },
         "/api/v1/auth/me" => %{
           get: %{
@@ -670,6 +694,15 @@ defmodule GodsWheelWeb.OpenApiController do
                   string_schema("New password; 8 to 72 characters", minLength: 8, maxLength: 72)
               },
               ["token", "password"]
+            ),
+          ChangePasswordRequest:
+            object_schema(
+              %{
+                current_password: string_schema("The account's current password"),
+                new_password:
+                  string_schema("New password; 8 to 72 characters and at most 72 bytes", minLength: 8, maxLength: 72)
+              },
+              ["current_password", "new_password"]
             ),
           SessionResponse:
             object_schema(
