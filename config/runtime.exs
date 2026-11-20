@@ -19,6 +19,13 @@ import Config
 
 frontend_url = System.get_env("FRONTEND_URL", "http://localhost:3000")
 
+password_reset_token_ttl_seconds =
+  String.to_integer(System.get_env("PASSWORD_RESET_TOKEN_TTL_SECONDS", "900"))
+
+if password_reset_token_ttl_seconds <= 0 do
+  raise ArgumentError, "PASSWORD_RESET_TOKEN_TTL_SECONDS must be greater than zero"
+end
+
 frontend_origins =
   System.get_env("FRONTEND_URLS", frontend_url)
   |> String.split(",")
@@ -58,7 +65,8 @@ config :godswheel,
   session_absolute_ttl_seconds:
     String.to_integer(System.get_env("SESSION_ABSOLUTE_TTL_SECONDS", "7776000")),
   verification_resend_cooldown_seconds:
-    String.to_integer(System.get_env("VERIFICATION_RESEND_COOLDOWN_SECONDS", "60"))
+    String.to_integer(System.get_env("VERIFICATION_RESEND_COOLDOWN_SECONDS", "60")),
+  password_reset_token_ttl_seconds: password_reset_token_ttl_seconds
 
 if config_env() in [:prod, :staging] do
   dashboard_username =

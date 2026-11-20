@@ -12,7 +12,6 @@ defmodule GodsWheel.Accounts do
 
   alias GodsWheel.Repo
 
-  @reset_token_ttl_seconds 3_600
   @verification_token_ttl_seconds 86_400
 
   def register_user(attrs) do
@@ -390,8 +389,14 @@ defmodule GodsWheel.Accounts do
   end
 
   defp deliver_verification_email(user, token) do
-    frontend_url = Application.get_env(:godswheel, :frontend_url, "http://localhost:3000")
+    frontend_url =
+      Application.get_env(:godswheel, :frontend_url, "http://localhost:3000")
+      |> String.trim_trailing("/")
+
     verification_url = frontend_url <> "/verify-email?token=" <> URI.encode_www_form(token)
+
+    app_url = String.trim_trailing(frontend_url, "/")
+    template = GodsWheel.EmailTemplates.verification_email(user, verification_url, app_url)
 
     email =
       Swoosh.Email.new()
@@ -403,10 +408,9 @@ defmodule GodsWheel.Accounts do
           {"Godswheel", "no-reply@godswheel.app"}
         )
       )
-      |> Swoosh.Email.subject("Verify your Godswheel email")
-      |> Swoosh.Email.text_body(
-        "Welcome to Godswheel. Verify your email within 24 hours using this link:\n#{verification_url}\n\nIf you did not create this account, you can ignore this email."
-      )
+      |> Swoosh.Email.subject("Confirm your email for GodsWheel")
+      |> Swoosh.Email.text_body(template.text)
+      |> Swoosh.Email.html_body(template.html)
 
     case GodsWheel.Mailer.deliver(email) do
       {:ok, _metadata} -> :ok
@@ -425,11 +429,16 @@ defmodule GodsWheel.Accounts do
     )
   end
 
+  defp password_reset_token_ttl_seconds do
+    Application.get_env(:godswheel, :password_reset_token_ttl_seconds, 900)
+  end
+
   defp create_password_reset_token(user) do
     raw_token = generate_token()
     token_hash = hash_token(raw_token)
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
-    expires_at = DateTime.add(now, @reset_token_ttl_seconds, :second)
+    expires_at =
+      DateTime.add(now, password_reset_token_ttl_seconds(), :second)
 
     result =
       Repo.transaction(fn ->
@@ -472,8 +481,18 @@ defmodule GodsWheel.Accounts do
   end
 
   defp deliver_password_reset_email(user, token) do
-    frontend_url = Application.get_env(:godswheel, :frontend_url, "http://localhost:3000")
+    frontend_url =
+      Application.get_env(:godswheel, :frontend_url, "http://localhost:3000")
+      |> String.trim_trailing("/")
+
     reset_url = frontend_url <> "/reset-password?token=" <> URI.encode_www_form(token)
+    template =
+      GodsWheel.EmailTemplates.password_reset_email(
+        user,
+        reset_url,
+        frontend_url,
+        password_reset_token_ttl_seconds()
+      )
 
     email =
       Swoosh.Email.new()
@@ -485,10 +504,9 @@ defmodule GodsWheel.Accounts do
           {"Godswheel", "no-reply@godswheel.app"}
         )
       )
-      |> Swoosh.Email.subject("Reset your Godswheel password")
-      |> Swoosh.Email.text_body(
-        "We received a request to reset your Godswheel password.\n\nUse this link within one hour:\n#{reset_url}\n\nIf you did not request this, you can ignore this email."
-      )
+      |> Swoosh.Email.subject("Reset your GodsWheel password")
+      |> Swoosh.Email.text_body(template.text)
+      |> Swoosh.Email.html_body(template.html)
 
     case GodsWheel.Mailer.deliver(email) do
       {:ok, _metadata} -> :ok
