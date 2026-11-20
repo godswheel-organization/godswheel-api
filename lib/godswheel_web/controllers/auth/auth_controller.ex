@@ -22,12 +22,69 @@ defmodule GodsWheelWeb.AuthController do
         )
 
       {:error, %Ecto.Changeset{} = changeset} ->
+        if duplicate_email?(changeset) do
+          Response.send_error(
+            conn,
+            :conflict,
+            "email_already_registered",
+            "An account with this email address already exists.",
+            errors_on(changeset)
+          )
+        else
+          Response.send_error(
+            conn,
+            :unprocessable_entity,
+            "validation_error",
+            "The submitted account details are invalid.",
+            errors_on(changeset)
+          )
+        end
+    end
+  end
+
+  def change_password(
+        conn,
+        %{
+          "current_password" => current_password,
+          "new_password" => new_password
+        }
+      ) do
+    case Accounts.change_password(conn.assigns.current_user.id, current_password, new_password) do
+      {:ok, _updated_user} ->
+        Response.send_success(
+          conn,
+          :updated,
+          %{
+            message:
+              "Your password was successfully changed. Remember to use your new password in your next login"
+          }
+        )
+
+      {:error, :not_found} ->
         Response.send_error(
           conn,
-          :unprocessable_entity,
+          :not_found,
+          "not_found",
+          "user not found",
+          "Check that your session is still valid"
+        )
+
+      {:error, :wrong_credentials} ->
+        Response.send_error(
+          conn,
+          :forbidden,
           "validation_error",
-          "The submitted account details are invalid.",
-          errors_on(changeset)
+          "wrong credentials",
+          "You must enter your current password correctly"
+        )
+
+      _ ->
+        Response.send_error(
+          conn,
+          :server_error,
+          "network_error",
+          "server error",
+          "Experience some issues during operation, please try again"
         )
     end
   end
@@ -211,6 +268,16 @@ defmodule GodsWheelWeb.AuthController do
       email: user.email,
       email_verified: not is_nil(user.email_verified_at)
     }
+  end
+
+  defp duplicate_email?(%Ecto.Changeset{errors: errors}) do
+    Enum.any?(errors, fn
+      {:email, {_message, opts}} ->
+        Keyword.get(opts, :constraint) == :unique
+
+      _ ->
+        false
+    end)
   end
 
   defp errors_on(changeset) do

@@ -16,35 +16,58 @@ defmodule GodsWheel.Accounts do
   @verification_token_ttl_seconds 86_400
 
   def register_user(attrs) do
-    Repo.transaction(fn ->
-      case %User{}
-           |> User.registration_changeset(attrs)
-           |> Repo.insert() do
-        {:ok, user} ->
-          token = create_email_verification_token!(user)
-          {user, token}
+    changeset = User.registration_changeset(%User{}, attrs)
 
-        {:error, changeset} ->
-          Repo.rollback(changeset)
+    if changeset.valid? do
+      Repo.transaction(fn ->
+        case Repo.insert(changeset) do
+          {:ok, user} ->
+            token = create_email_verification_token!(user)
+            {user, token}
+
+          {:error, changeset} ->
+            Repo.rollback(changeset)
+        end
+      end)
+      |> case do
+        {:ok, {user, token}} ->
+          case deliver_verification_email(user, token) do
+            :ok ->
+              {:ok, user}
+
+            {:error, reason} ->
+              Logger.error("Unable to deliver email verification: #{inspect(reason)}")
+              invalidate_verification_token(token)
+              {:ok, user}
+          end
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          {:error, changeset}
+
+        {:error, reason} ->
+          {:error, reason}
       end
-    end)
-    |> case do
-      {:ok, {user, token}} ->
-        case deliver_verification_email(user, token) do
-          :ok ->
-            {:ok, user}
+    else
+      {:error, changeset}
+    end
+  end
 
-          {:error, reason} ->
-            Logger.error("Unable to deliver email verification: #{inspect(reason)}")
-            invalidate_verification_token(token)
-            {:ok, user}
+  def change_password(id, current_password, new_password) do
+    case get_user(id) do
+      %User{} = user ->
+        old_password_hash = user.password_hash
+
+        if Bcrypt.verify_pass(current_password, old_password_hash) do
+          case User.password_changeset(user, %{password: new_password}) |> Repo.update() do
+            {:ok, updated_user} -> {:ok, updated_user}
+            _ -> {:error, :operation_failed}
+          end
+        else
+          {:error, :wrong_credentials}
         end
 
-      {:error, %Ecto.Changeset{} = changeset} ->
-        {:error, changeset}
-
-      {:error, reason} ->
-        {:error, reason}
+      _ ->
+        {:error, :not_found}
     end
   end
 

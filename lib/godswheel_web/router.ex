@@ -50,6 +50,7 @@ defmodule GodsWheelWeb.Router do
     post "/auth/logout-all", AuthController, :logout_all
     get "/sermons/:id/progress", Sermon.SermonUserController, :progress
     put "/sermons/:id/progress", Sermon.SermonUserController, :save_progress
+    put "/auth/change-password", AuthController, :change_password
     get "/sermons/:id/note", Sermon.SermonUserController, :note
     patch "/sermons/:id/note", Sermon.SermonUserController, :save_note
     post "/sermons/:id/bookmark", Sermon.SermonUserController, :create_bookmark
