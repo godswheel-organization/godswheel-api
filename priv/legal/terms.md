@@ -1,0 +1,3 @@
+# Terms & Agreement
+
+Placeholder content.

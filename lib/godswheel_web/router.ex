@@ -29,6 +29,8 @@ defmodule GodsWheelWeb.Router do
 
     get "/health", HealthController, :show
     get "/health/live", HealthController, :live
+    get "/legal/terms", LegalController, :terms
+    get "/legal/privacy", LegalController, :privacy
     get "/sermons", Sermon.SermonController, :index
     get "/sermons/:id", Sermon.SermonController, :show
     get "/sermons/:id/audio", Sermon.SermonController, :audio

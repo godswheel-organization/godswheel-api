@@ -49,9 +49,32 @@ defmodule GodsWheelWeb.OpenApiController do
         %{name: "Authentication", description: "Account registration and authentication"},
         %{name: "Sermons", description: "Public sermon discovery and catalogue"},
         %{name: "Categories", description: "Public sermon categories"},
-        %{name: "Speakers", description: "Public sermon speakers"}
+        %{name: "Speakers", description: "Public sermon speakers"},
+        %{name: "Legal", description: "Public legal documents"}
       ],
       paths: %{
+        "/api/v1/legal/terms" => %{
+          get: %{
+            tags: ["Legal"],
+            summary: "Get terms and agreement",
+            description: "Returns the current Terms & Agreement document as Markdown. This endpoint is public and does not require authentication.",
+            responses: %{
+              "200" => response("Terms & Agreement document.", "LegalDocumentResponse"),
+              "500" => response("The document is currently unavailable.", "ErrorResponse")
+            }
+          }
+        },
+        "/api/v1/legal/privacy" => %{
+          get: %{
+            tags: ["Legal"],
+            summary: "Get privacy policy",
+            description: "Returns the current Privacy Policy document as Markdown. This endpoint is public and does not require authentication.",
+            responses: %{
+              "200" => response("Privacy Policy document.", "LegalDocumentResponse"),
+              "500" => response("The document is currently unavailable.", "ErrorResponse")
+            }
+          }
+        },
         "/api/v1/sermons" => %{
           get:
             catalogue_operation(
@@ -478,6 +501,22 @@ defmodule GodsWheelWeb.OpenApiController do
           }
         },
         schemas: %{
+          LegalDocumentResponse:
+            object_schema(
+              %{
+                success: %{type: "boolean", enum: [true]},
+                data:
+                  object_schema(
+                    %{
+                      title: string_schema("Document title"),
+                      content: string_schema("Document content in Markdown format"),
+                      contentType: string_schema("Document media type", enum: ["text/markdown"])
+                    },
+                    ["title", "content", "contentType"]
+                  )
+              },
+              ["success", "data"]
+            ),
           PaginationMeta:
             object_schema(
               %{
