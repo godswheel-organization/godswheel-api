@@ -1,3 +1,3 @@
 # Terms & Agreement
 
-Placeholder content.
+Placeholder content for terms & agreement.
