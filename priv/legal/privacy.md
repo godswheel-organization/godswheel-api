@@ -1,3 +1,3 @@
 # Privacy Policy
 
-Placeholder content.
+Placeholder content will be here.
