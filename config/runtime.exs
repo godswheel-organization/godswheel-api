@@ -214,6 +214,12 @@ if config_env() in [:prod, :staging] do
   # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
 end
 
+config :godswheel, :storage_adapter, GodsWheel.Storage.Tigris
+
+config :godswheel,
+  sermon_progress_flush_interval_ms:
+    String.to_integer(System.get_env("SERMON_PROGRESS_FLUSH_INTERVAL_MS", "300_000"))
+
 config :godswheel, :tigris,
   bucket: System.get_env("TIGRIS_BUCKET"),
   access_key_id: System.get_env("AWS_ACCESS_KEY_ID"),

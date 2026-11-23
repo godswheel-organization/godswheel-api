@@ -1,9 +1,12 @@
 defmodule GodsWheel.Storage.Tigris do
+  @behaviour GodsWheel.Storage.Adapter
+
   @default_endpoint "https://t3.storage.dev"
   @default_region "auto"
   @default_url_ttl_seconds 14_400
   @max_url_ttl_seconds 604_800
 
+  @impl true
   def playback_url(object_key) when is_binary(object_key) do
     with {:ok, config} <- storage_config(),
          {:ok, object_key} <- normalize_object_key(object_key),

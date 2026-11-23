@@ -437,6 +437,7 @@ defmodule GodsWheel.Accounts do
     raw_token = generate_token()
     token_hash = hash_token(raw_token)
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
     expires_at =
       DateTime.add(now, password_reset_token_ttl_seconds(), :second)
 
@@ -486,6 +487,7 @@ defmodule GodsWheel.Accounts do
       |> String.trim_trailing("/")
 
     reset_url = frontend_url <> "/reset-password?token=" <> URI.encode_www_form(token)
+
     template =
       GodsWheel.EmailTemplates.password_reset_email(
         user,

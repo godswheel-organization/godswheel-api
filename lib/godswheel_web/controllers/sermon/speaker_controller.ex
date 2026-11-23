@@ -10,12 +10,22 @@ defmodule GodsWheelWeb.Sermon.SpeakerController do
       {:ok, result} ->
         json(conn, SermonJSON.speakers(result))
 
-      {:error, :invalid_pagination} ->
+      {:error, {:invalid_pagination, field, message}} ->
         Response.send_error(
           conn,
           :unprocessable_entity,
           "invalid_pagination",
-          "Invalid pagination parameters."
+          "The #{field} query parameter is invalid.",
+          %{fields: %{field => [message]}}
+        )
+
+      {:error, {:invalid_filter, field, message}} ->
+        Response.send_error(
+          conn,
+          :unprocessable_entity,
+          "invalid_filter",
+          "The #{field} query parameter is invalid.",
+          %{fields: %{field => [message]}}
         )
     end
   end

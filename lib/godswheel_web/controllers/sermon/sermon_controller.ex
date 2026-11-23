@@ -2,7 +2,7 @@ defmodule GodsWheelWeb.Sermon.SermonController do
   use GodsWheelWeb, :controller
 
   alias GodsWheel.Sermons
-  alias GodsWheel.Storage.Tigris
+  alias GodsWheel.Storage
   alias GodsWheelWeb.Response
   alias GodsWheelWeb.Sermon.SermonJSON
 
@@ -28,7 +28,7 @@ defmodule GodsWheelWeb.Sermon.SermonController do
 
   def audio(conn, %{"id" => id}) do
     with {:ok, audio_key} <- Sermons.get_sermon_audio(id),
-         {:ok, playback} <- Tigris.playback_url(audio_key) do
+         {:ok, playback} <- Storage.playback_url(audio_key) do
       conn
       |> put_resp_header("cache-control", "no-store")
       |> json(Response.success(playback))
@@ -52,22 +52,23 @@ defmodule GodsWheelWeb.Sermon.SermonController do
     end
   end
 
-  defp render_error(conn, :invalid_pagination) do
+  defp render_error(conn, {:invalid_pagination, field, message}) do
     Response.send_error(
       conn,
       :unprocessable_entity,
       "invalid_pagination",
-      "Invalid pagination parameters."
+      "The #{field} query parameter is invalid.",
+      %{fields: %{field => [message]}}
     )
   end
 
-  defp render_error(conn, {:invalid_filter, field}) do
+  defp render_error(conn, {:invalid_filter, field, message}) do
     Response.send_error(
       conn,
       :unprocessable_entity,
       "invalid_filter",
-      "Invalid #{field} parameter.",
-      %{field: field}
+      "The #{field} query parameter is invalid.",
+      %{fields: %{field => [message]}}
     )
   end
 end

@@ -29,18 +29,20 @@ defmodule GodsWheelWeb.Sermon.SermonUserController do
           conn,
           :unprocessable_entity,
           "invalid_position",
-          "position_seconds must be a non-negative integer."
+          "position_seconds must be a non-negative integer.",
+          %{fields: %{position_seconds: ["must be a non-negative integer"]}}
         )
 
       {:error, :not_found} ->
         sermon_not_found(conn)
 
-      {:error, %Ecto.Changeset{}} ->
+      {:error, %Ecto.Changeset{} = changeset} ->
         Response.send_error(
           conn,
           :unprocessable_entity,
-          "invalid_position",
-          "position_seconds must be a non-negative integer."
+          "validation_error",
+          "position_seconds must be a non-negative integer.",
+          %{fields: Response.validation_errors(changeset)}
         )
     end
   end
@@ -63,8 +65,14 @@ defmodule GodsWheelWeb.Sermon.SermonUserController do
       {:error, :not_found} ->
         sermon_not_found(conn)
 
-      {:error, %Ecto.Changeset{}} ->
-        Response.send_error(conn, :unprocessable_entity, "invalid_note", "Invalid note content.")
+      {:error, %Ecto.Changeset{} = changeset} ->
+        Response.send_error(
+          conn,
+          :unprocessable_entity,
+          "validation_error",
+          "The note could not be saved. Check the supplied content.",
+          %{fields: Response.validation_errors(changeset)}
+        )
     end
   end
 
@@ -73,7 +81,8 @@ defmodule GodsWheelWeb.Sermon.SermonUserController do
       conn,
       :unprocessable_entity,
       "invalid_note",
-      "content must be a string."
+      "content must be a string.",
+      %{fields: %{content: ["must be a string"]}}
     )
   end
 
@@ -141,22 +150,23 @@ defmodule GodsWheelWeb.Sermon.SermonUserController do
     Response.send_error(conn, :not_found, "sermon_not_found", "Sermon not found.")
   end
 
-  defp render_error(conn, :invalid_pagination) do
+  defp render_error(conn, {:invalid_pagination, field, message}) do
     Response.send_error(
       conn,
       :unprocessable_entity,
       "invalid_pagination",
-      "Invalid pagination parameters."
+      "The #{field} query parameter is invalid.",
+      %{fields: %{field => [message]}}
     )
   end
 
-  defp render_error(conn, {:invalid_filter, field}) do
+  defp render_error(conn, {:invalid_filter, field, message}) do
     Response.send_error(
       conn,
       :unprocessable_entity,
       "invalid_filter",
-      "Invalid #{field} parameter.",
-      %{field: field}
+      "The #{field} query parameter is invalid.",
+      %{fields: %{field => [message]}}
     )
   end
 end

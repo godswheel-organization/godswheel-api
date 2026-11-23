@@ -225,9 +225,10 @@ defmodule GodsWheel.Sermons do
   def get_sermon_audio(_id), do: {:error, :not_found}
 
   def list_categories(params \\ %{}) do
-    with {:ok, pagination} <- pagination(params) do
+    with {:ok, pagination} <- pagination(params),
+         {:ok, search} <- optional_string(params, "search") do
       query = from(category in Category)
-      query = apply_name_search(query, params)
+      query = apply_name_search(query, search)
       total_entries = Repo.aggregate(query, :count, :id)
 
       entries =
@@ -242,9 +243,10 @@ defmodule GodsWheel.Sermons do
   end
 
   def list_speakers(params \\ %{}) do
-    with {:ok, pagination} <- pagination(params) do
+    with {:ok, pagination} <- pagination(params),
+         {:ok, search} <- optional_string(params, "search") do
       query = from(speaker in Speaker)
-      query = apply_name_search(query, params)
+      query = apply_name_search(query, search)
       total_entries = Repo.aggregate(query, :count, :id)
 
       entries =
@@ -259,18 +261,21 @@ defmodule GodsWheel.Sermons do
   end
 
   defp sermon_filters(params) do
-    with {:ok, category_id} <- optional_uuid(params, "category_id"),
+    with {:ok, search} <- optional_string(params, "search"),
+         {:ok, language} <- optional_string(params, "language"),
+         {:ok, category_id} <- optional_uuid(params, "category_id"),
          {:ok, speaker_id} <- optional_uuid(params, "speaker_id"),
          {:ok, sort} <- sort_option(params),
+         {:ok, search_in} <- search_fields(params["search_in"]),
          {:ok, scripture} <- scripture_filter(params["scripture"]) do
       {:ok,
        %{
-         search: normalized_search(params["search"]),
-         search_in: search_fields(params["search_in"]),
+         search: search,
+         search_in: search_in,
          category_id: category_id,
          speaker_id: speaker_id,
          scripture: scripture,
-         language: normalized_search(params["language"]),
+         language: language,
          sort: sort
        }}
     end
@@ -314,10 +319,11 @@ defmodule GodsWheel.Sermons do
       |> Enum.filter(&(&1 in ["title", "description"]))
       |> Enum.uniq()
 
-    if fields == [], do: ["title", "description"], else: fields
+    fields = if fields == [], do: ["title", "description"], else: fields
+    {:ok, fields}
   end
 
-  defp search_fields(_value), do: ["title", "description"]
+  defp search_fields(_value), do: {:ok, ["title", "description"]}
 
   defp maybe_filter_category(query, nil), do: query
 
@@ -374,31 +380,38 @@ defmodule GodsWheel.Sermons do
   defp scripture_filter(value) when is_binary(value) do
     value = String.trim(value)
 
-    case Regex.named_captures(
-           ~r/^(?<book>.+?)\s+(?<chapter>\d+)(?::(?<start_verse>\d+)(?:\s*-\s*(?<end_verse>\d+))?)?$/,
-           value
-         ) do
-      %{"book" => book, "chapter" => chapter} = captures ->
-        parse_scripture_parts(
-          book,
-          chapter,
-          empty_to_nil(captures["start_verse"]),
-          empty_to_nil(captures["end_verse"])
-        )
-
-      nil when value != "" ->
-        if String.match?(value, ~r/\d/) do
-          {:error, {:invalid_filter, "scripture"}}
-        else
-          {:ok, %{book: value, chapter: nil, start_verse: nil, end_verse: nil}}
-        end
-
-      _ ->
+    cond do
+      value == "" ->
         {:ok, nil}
+
+      Regex.match?(~r/^[^0-9:]+$/, value) ->
+        {:ok, %{book: value, chapter: nil, start_verse: nil, end_verse: nil}}
+
+      true ->
+        case Regex.named_captures(
+               ~r/^(?<book>[^0-9:]+?)\s+(?<chapter>\d+)(?::(?<start_verse>\d+)(?:\s*-\s*(?<end_verse>\d+))?)?$/,
+               value
+             ) do
+          %{"book" => book, "chapter" => chapter} = captures ->
+            parse_scripture_parts(
+              book,
+              chapter,
+              empty_to_nil(captures["start_verse"]),
+              empty_to_nil(captures["end_verse"])
+            )
+
+          _ ->
+            {:error,
+             {:invalid_filter, "scripture",
+              "must be a book, chapter, verse, or verse range, e.g. Romans, Romans 8, Romans 8:28, or Romans 8:28-30"}}
+        end
     end
   end
 
-  defp scripture_filter(_value), do: {:error, {:invalid_filter, "scripture"}}
+  defp scripture_filter(_value) do
+    {:error,
+     {:invalid_filter, "scripture", "must be a string such as Romans 8:28 or Romans 8:28-30"}}
+  end
 
   defp parse_scripture_parts(book, chapter, start_verse, end_verse) do
     with true <- String.trim(book) != "",
@@ -406,7 +419,8 @@ defmodule GodsWheel.Sermons do
          true <- chapter > 0,
          {:ok, start_verse} <- optional_positive_integer(start_verse),
          {:ok, end_verse} <- optional_positive_integer(end_verse),
-         true <- is_nil(end_verse) or (not is_nil(start_verse) and end_verse >= start_verse) do
+         true <- is_nil(end_verse) or not is_nil(start_verse),
+         true <- is_nil(end_verse) or end_verse >= start_verse do
       {:ok,
        %{
          book: String.trim(book),
@@ -418,7 +432,10 @@ defmodule GodsWheel.Sermons do
          if is_nil(start_verse), do: %{filter | end_verse: nil}, else: filter
        end)}
     else
-      _ -> {:error, {:invalid_filter, "scripture"}}
+      _ ->
+        {:error,
+         {:invalid_filter, "scripture",
+          "chapter and verse numbers must be positive, and the ending verse must not be earlier than the starting verse"}}
     end
   end
 
@@ -453,31 +470,37 @@ defmodule GodsWheel.Sermons do
     Repo.aggregate(query, :count, :id)
   end
 
-  defp apply_name_search(query, params) do
-    case normalized_search(params["search"]) do
-      nil -> query
-      search -> where(query, [record], ilike(record.name, ^"%#{search}%"))
-    end
+  defp apply_name_search(query, nil), do: query
+
+  defp apply_name_search(query, search) do
+    where(query, [record], ilike(record.name, ^"%#{search}%"))
   end
 
   defp pagination(params) do
-    with {:ok, page} <- positive_integer(params["page"], 1),
-         {:ok, limit} <- positive_integer(params["limit"], @default_limit) do
-      {:ok, %{page: page, limit: min(limit, @max_limit)}}
+    with {:ok, page} <- positive_integer(params["page"], "page", 1),
+         {:ok, limit} <- positive_integer(params["limit"], "limit", @default_limit) do
+      if limit <= @max_limit do
+        {:ok, %{page: page, limit: limit}}
+      else
+        {:error, {:invalid_pagination, "limit", "must be between 1 and #{@max_limit}"}}
+      end
     end
   end
 
-  defp positive_integer(nil, default), do: {:ok, default}
-  defp positive_integer(value, _default) when is_integer(value) and value > 0, do: {:ok, value}
+  defp positive_integer(nil, _field, default), do: {:ok, default}
 
-  defp positive_integer(value, _default) when is_binary(value) do
+  defp positive_integer(value, _field, _default) when is_integer(value) and value > 0,
+    do: {:ok, value}
+
+  defp positive_integer(value, field, _default) when is_binary(value) do
     case Integer.parse(value) do
       {integer, ""} when integer > 0 -> {:ok, integer}
-      _ -> {:error, :invalid_pagination}
+      _ -> {:error, {:invalid_pagination, field, "must be a positive integer"}}
     end
   end
 
-  defp positive_integer(_value, _default), do: {:error, :invalid_pagination}
+  defp positive_integer(_value, field, _default),
+    do: {:error, {:invalid_pagination, field, "must be a positive integer"}}
 
   defp optional_uuid(params, key) do
     case params[key] do
@@ -487,11 +510,11 @@ defmodule GodsWheel.Sermons do
       value when is_binary(value) ->
         case Ecto.UUID.cast(value) do
           {:ok, uuid} -> {:ok, uuid}
-          :error -> {:error, {:invalid_filter, key}}
+          :error -> {:error, {:invalid_filter, key, "must be a valid UUID"}}
         end
 
       _ ->
-        {:error, {:invalid_filter, key}}
+        {:error, {:invalid_filter, key, "must be a valid UUID"}}
     end
   end
 
@@ -499,18 +522,25 @@ defmodule GodsWheel.Sermons do
     case params["sort"] do
       nil -> {:ok, "newest"}
       sort when sort in ["newest", "oldest"] -> {:ok, sort}
-      _ -> {:error, {:invalid_filter, "sort"}}
+      _ -> {:error, {:invalid_filter, "sort", "must be either newest or oldest"}}
     end
   end
 
-  defp normalized_search(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      search_term -> search_term
+  defp optional_string(params, key) do
+    case params[key] do
+      nil ->
+        {:ok, nil}
+
+      value when is_binary(value) ->
+        case String.trim(value) do
+          "" -> {:ok, nil}
+          normalized -> {:ok, normalized}
+        end
+
+      _ ->
+        {:error, {:invalid_filter, key, "must be a string"}}
     end
   end
-
-  defp normalized_search(_value), do: nil
 
   defp pagination_meta(pagination, total_entries) do
     %{

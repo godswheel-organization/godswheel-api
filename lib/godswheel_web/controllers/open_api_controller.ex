@@ -57,7 +57,7 @@ defmodule GodsWheelWeb.OpenApiController do
             catalogue_operation(
               "Sermons",
               "List sermons",
-              "Returns published sermons with optional title/description search, filters, sorting and pagination. Omit search_in[] to search both title and description; provide title and/or description to restrict the search fields. The scripture filter accepts a book, chapter, verse, or verse range, such as Romans, Romans 8, Romans 8:28, or Romans 8:28-30.",
+              "Returns published sermons with optional title/description search, filters, sorting and pagination. Omit search_in[] to search both title and description; when supplied, every value must be title or description. search and language must be strings. category_id and speaker_id must be UUIDs. sort accepts newest or oldest. page must be a positive integer; limit must be between 1 and 100. The scripture filter accepts a book, chapter, verse, or verse range, such as Romans, Romans 8, Romans 8:28, or Romans 8:28-30. Chapter and verse numbers must be positive, and the ending verse cannot precede the starting verse.",
               [
                 "search",
                 "search_in[]",
@@ -90,7 +90,7 @@ defmodule GodsWheelWeb.OpenApiController do
             tags: ["Sermons"],
             summary: "Play sermon audio",
             description:
-              "Returns a short-lived presigned Tigris URL for a published sermon. The audio object key is read from the sermon audio_url field. The browser streams directly from the private Tigris bucket; configure bucket CORS to allow GET and HEAD requests from the frontend origin.",
+              "Returns a short-lived presigned URL for a published sermon. The audio object key is read from the sermon audio_url field. The browser streams directly from the configured private object-storage provider; configure bucket CORS to allow GET and HEAD requests from the frontend origin.",
             parameters: [
               %{name: "id", in: "path", required: true, schema: %{type: "string", format: "uuid"}}
             ],
@@ -245,7 +245,7 @@ defmodule GodsWheelWeb.OpenApiController do
             catalogue_operation(
               "Sermons",
               "List bookmarked sermons",
-              "Returns the authenticated user's bookmarked published sermons. Supports the same search, filters, sorting, and pagination as the public sermon catalogue.",
+              "Returns the authenticated user's bookmarked published sermons. Supports the same search, filters, sorting, and pagination as the public sermon catalogue, including the same query parameter validation.",
               [
                 "search",
                 "search_in[]",
@@ -373,7 +373,11 @@ defmodule GodsWheelWeb.OpenApiController do
               "EmailRequest",
               %{
                 "200" => response("Generic confirmation.", "MessageResponse"),
-                "422" => response("Email is missing.", "ErrorResponse")
+                "422" =>
+                  response(
+                    "Email is required and must be a valid email address.",
+                    "ValidationError"
+                  )
               }
             )
         },
@@ -386,7 +390,11 @@ defmodule GodsWheelWeb.OpenApiController do
               "EmailRequest",
               %{
                 "200" => response("Generic confirmation.", "MessageResponse"),
-                "422" => response("Email is missing.", "ErrorResponse")
+                "422" =>
+                  response(
+                    "Email is required and must be a valid email address.",
+                    "ValidationError"
+                  )
               }
             )
         },
@@ -399,7 +407,11 @@ defmodule GodsWheelWeb.OpenApiController do
               "ResetPasswordRequest",
               %{
                 "200" => response("Password reset successfully.", "MessageResponse"),
-                "422" => response("Invalid, expired token or invalid password.", "ErrorResponse")
+                "422" =>
+                  response(
+                    "The token is invalid or expired, or the new password does not meet the documented password requirements. Password validation errors include field-level details.",
+                    "ValidationError"
+                  )
               }
             )
         },
@@ -419,11 +431,23 @@ defmodule GodsWheelWeb.OpenApiController do
               }
             },
             responses: %{
-              "200" => response("Password changed; other active sessions have been revoked.", "MessageResponse"),
+              "200" =>
+                response(
+                  "Password changed; other active sessions have been revoked.",
+                  "MessageResponse"
+                ),
               "401" => response("Authentication required.", "ErrorResponse"),
               "403" => response("The current password is incorrect.", "ErrorResponse"),
-              "422" => response("Required fields are missing or the new password is invalid.", "ValidationError"),
-              "500" => response("The password could not be changed due to an unexpected error.", "ErrorResponse")
+              "422" =>
+                response(
+                  "Required fields are missing or the new password is invalid.",
+                  "ValidationError"
+                ),
+              "500" =>
+                response(
+                  "The password could not be changed due to an unexpected error.",
+                  "ErrorResponse"
+                )
             }
           }
         },
@@ -640,7 +664,10 @@ defmodule GodsWheelWeb.OpenApiController do
                 full_name: string_schema("User's full name", minLength: 2, maxLength: 120),
                 email: string_schema("Email address", format: "email", maxLength: 254),
                 password:
-                  string_schema("Password; 8 to 72 characters", minLength: 8, maxLength: 72),
+                  string_schema("Password; 8 to 72 characters and no more than 72 UTF-8 bytes",
+                    minLength: 8,
+                    maxLength: 72
+                  ),
                 accepted_terms: %{
                   type: "boolean",
                   enum: [true],
@@ -691,7 +718,11 @@ defmodule GodsWheelWeb.OpenApiController do
               %{
                 token: string_schema("Single-use password-reset token"),
                 password:
-                  string_schema("New password; 8 to 72 characters", minLength: 8, maxLength: 72)
+                  string_schema(
+                    "New password; 8 to 72 characters and no more than 72 UTF-8 bytes",
+                    minLength: 8,
+                    maxLength: 72
+                  )
               },
               ["token", "password"]
             ),
@@ -700,7 +731,11 @@ defmodule GodsWheelWeb.OpenApiController do
               %{
                 current_password: string_schema("The account's current password"),
                 new_password:
-                  string_schema("New password; 8 to 72 characters and at most 72 bytes", minLength: 8, maxLength: 72)
+                  string_schema(
+                    "New password; 8 to 72 characters and no more than 72 UTF-8 bytes",
+                    minLength: 8,
+                    maxLength: 72
+                  )
               },
               ["current_password", "new_password"]
             ),
@@ -829,6 +864,12 @@ defmodule GodsWheelWeb.OpenApiController do
                     default: "newest"
                   }
 
+                name in ["category_id", "speaker_id"] ->
+                  %{type: "string", format: "uuid"}
+
+                name in ["search", "language", "scripture"] ->
+                  %{type: "string"}
+
                 true ->
                   %{type: "string"}
               end,
@@ -838,10 +879,29 @@ defmodule GodsWheelWeb.OpenApiController do
         end),
       responses: %{
         "200" => response("Paginated catalogue results.", response_schema),
-        "422" => response("Invalid query parameters.", "ErrorResponse")
+        "422" =>
+          response(
+            "Invalid query parameter. The response identifies the parameter and explains its accepted format or range in error.details.fields.",
+            "ValidationError"
+          )
       }
     }
   end
+
+  defp parameter_description("page"),
+    do: "One-based page number. Must be a positive integer. Defaults to 1."
+
+  defp parameter_description("limit"),
+    do: "Number of records per page. Must be between 1 and 100. Defaults to 20."
+
+  defp parameter_description("category_id"), do: "Filters by category. Must be a valid UUID."
+  defp parameter_description("speaker_id"), do: "Filters by speaker. Must be a valid UUID."
+
+  defp parameter_description("search"),
+    do: "Optional text to search in the selected search_in[] fields. Must be a string."
+
+  defp parameter_description("language"),
+    do: "Filters by language using a case-insensitive partial match. Must be a string."
 
   defp parameter_description("sort") do
     "Controls sermon ordering. newest: most recently published first (default). oldest: earliest published first."

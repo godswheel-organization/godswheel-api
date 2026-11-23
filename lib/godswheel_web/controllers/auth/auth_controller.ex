@@ -28,7 +28,7 @@ defmodule GodsWheelWeb.AuthController do
             :conflict,
             "email_already_registered",
             "An account with this email address already exists.",
-            errors_on(changeset)
+            %{fields: Response.validation_errors(changeset)}
           )
         else
           Response.send_error(
@@ -36,7 +36,7 @@ defmodule GodsWheelWeb.AuthController do
             :unprocessable_entity,
             "validation_error",
             "The submitted account details are invalid.",
-            errors_on(changeset)
+            %{fields: Response.validation_errors(changeset)}
           )
         end
     end
@@ -61,7 +61,8 @@ defmodule GodsWheelWeb.AuthController do
           conn,
           :ok,
           %{
-            message: "Your password was successfully changed. Other active sessions have been logged out."
+            message:
+              "Your password was successfully changed. Other active sessions have been logged out."
           }
         )
 
@@ -89,7 +90,7 @@ defmodule GodsWheelWeb.AuthController do
           :unprocessable_entity,
           "validation_error",
           "The new password does not meet the requirements.",
-          errors_on(changeset)
+          %{fields: Response.validation_errors(changeset)}
         )
 
       {:error, _reason} ->
@@ -102,16 +103,52 @@ defmodule GodsWheelWeb.AuthController do
     end
   end
 
-  def change_password(conn, _params) do
+  def change_password(conn, params) do
+    fields =
+      %{}
+      |> maybe_add_field_error(params, "current_password", "is required and must be a string")
+      |> maybe_add_field_error(params, "new_password", "is required and must be a string")
+
     Response.send_error(
       conn,
       :unprocessable_entity,
       "validation_error",
-      "Both current_password and new_password are required and must be strings."
+      "Provide both current_password and new_password as strings.",
+      %{fields: fields}
     )
   end
 
-  def login(conn, %{"email" => identifier, "password" => password}) do
+  def login(conn, %{"email" => identifier, "password" => password})
+      when is_binary(identifier) and is_binary(password) and password != "" do
+    if valid_email?(identifier) do
+      authenticate_and_respond(conn, identifier, password)
+    else
+      Response.send_error(
+        conn,
+        :unprocessable_entity,
+        "invalid_credentials_input",
+        "email must be a valid email address.",
+        %{fields: %{email: ["must be a valid email address"]}}
+      )
+    end
+  end
+
+  def login(conn, params) do
+    fields =
+      %{}
+      |> maybe_add_field_error(params, "email", "must be a valid email address")
+      |> maybe_add_field_error(params, "password", "is required and must be a non-empty string")
+
+    Response.send_error(
+      conn,
+      :unprocessable_entity,
+      "invalid_credentials_input",
+      "Provide a valid email address and a password.",
+      %{fields: fields}
+    )
+  end
+
+  defp authenticate_and_respond(conn, identifier, password) do
     case Accounts.authenticate(identifier, password) do
       {:ok, user} ->
         issue_session(conn, user)
@@ -132,15 +169,6 @@ defmodule GodsWheelWeb.AuthController do
           "Invalid email or password."
         )
     end
-  end
-
-  def login(conn, _params) do
-    Response.send_error(
-      conn,
-      :unprocessable_entity,
-      "missing_credentials",
-      "identifier (email) and password are required."
-    )
   end
 
   def verify_email(conn, %{"token" => token}) do
@@ -212,26 +240,23 @@ defmodule GodsWheelWeb.AuthController do
     |> json(Response.success(%{message: "All sessions have been logged out."}))
   end
 
-  def resend_verification(conn, %{"email" => email}) do
-    :ok = Accounts.resend_verification_email(email)
+  def resend_verification(conn, %{"email" => email}) when is_binary(email) do
+    if valid_email?(email) do
+      :ok = Accounts.resend_verification_email(email)
 
-    json(
-      conn,
-      Response.success(%{
-        message:
-          "If an unverified account exists for that email, a verification email will be sent."
-      })
-    )
+      json(
+        conn,
+        Response.success(%{
+          message:
+            "If an unverified account exists for that email, a verification email will be sent."
+        })
+      )
+    else
+      invalid_email_response(conn)
+    end
   end
 
-  def resend_verification(conn, _params) do
-    Response.send_error(
-      conn,
-      :unprocessable_entity,
-      "missing_email",
-      "email is required."
-    )
-  end
+  def resend_verification(conn, _params), do: invalid_email_response(conn)
 
   def me(conn, _params) do
     render(conn, :user, user: conn.assigns.current_user)
@@ -292,6 +317,25 @@ defmodule GodsWheelWeb.AuthController do
     }
   end
 
+  defp maybe_add_field_error(errors, params, field, message) do
+    case params[field] do
+      value when is_binary(value) and value != "" -> errors
+      _ -> Map.put(errors, field, [message])
+    end
+  end
+
+  defp valid_email?(email), do: Regex.match?(~r/^[^\s]+@[^\s]+\.[^\s]+$/, String.trim(email))
+
+  defp invalid_email_response(conn) do
+    Response.send_error(
+      conn,
+      :unprocessable_entity,
+      "invalid_email",
+      "email is required and must be a valid email address.",
+      %{fields: %{email: ["must be a valid email address"]}}
+    )
+  end
+
   defp duplicate_email?(%Ecto.Changeset{errors: errors}) do
     Enum.any?(errors, fn
       {:email, {_message, opts}} ->
@@ -299,14 +343,6 @@ defmodule GodsWheelWeb.AuthController do
 
       _ ->
         false
-    end)
-  end
-
-  defp errors_on(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
-      Regex.replace(~r/%{(\\w+)}/, message, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
     end)
   end
 end
