@@ -8,7 +8,7 @@ defmodule GodsWheel.Accounts.CleanupExpiredRecords do
   alias GodsWheel.Accounts.{EmailVerificationToken, PasswordResetToken, UserSession}
   alias GodsWheel.Repo
 
-  @run_hour_utc 2
+  @run_hour_utc 1
   @advisory_lock_id 6561
 
   def start_link(opts \\ []) do
