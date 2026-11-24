@@ -208,7 +208,7 @@ config :godswheel, :storage_adapter, GodsWheel.Storage.Tigris
 
 config :godswheel,
   sermon_progress_flush_interval_ms:
-    String.to_integer(System.get_env("SERMON_PROGRESS_FLUSH_INTERVAL_MS", "300000"))
+    String.to_integer(System.get_env("SERMON_PROGRESS_FLUSH_INTERVAL_MS", "200000"))
 
 config :godswheel, :tigris,
   bucket: System.get_env("TIGRIS_BUCKET"),
