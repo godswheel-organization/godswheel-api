@@ -9,7 +9,7 @@ defmodule GodsWheelWeb.Plugs.Authenticate do
   def call(conn, _opts) do
     with ["Bearer " <> token] <- get_req_header(conn, "authorization"),
          {:ok, claims} <- JWT.verify(token),
-         true <- Accounts.active_session?(claims["sid"]),
+         true <- Accounts.active_session?(claims["sid"], token),
          %{} = user <- Accounts.get_user(claims["sub"]) do
       conn
       |> assign(:current_user, user)

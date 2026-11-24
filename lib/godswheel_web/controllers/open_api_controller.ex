@@ -348,22 +348,6 @@ defmodule GodsWheelWeb.OpenApiController do
               }
             )
         },
-        "/api/v1/auth/refresh" => %{
-          post: %{
-            tags: ["Authentication"],
-            summary: "Refresh access token",
-            description:
-              "Uses the HttpOnly refresh-token cookie to rotate the session refresh token and issue a new one-hour access token. The browser must send credentials.",
-            security: [%{RefreshCookie: []}],
-            responses: %{
-              "200" =>
-                response("Access token refreshed; refresh cookie rotated.", "RefreshResponse"),
-              "401" =>
-                response("Refresh session is invalid, expired, or revoked.", "ErrorResponse"),
-              "403" => response("Request origin is not allowed.", "ErrorResponse")
-            }
-          }
-        },
         "/api/v1/auth/logout" => %{
           post: %{
             tags: ["Authentication"],
@@ -371,7 +355,7 @@ defmodule GodsWheelWeb.OpenApiController do
             security: [%{BearerAuth: []}],
             responses: %{
               "200" =>
-                response("Current session revoked and refresh cookie cleared.", "MessageResponse"),
+                response("Current access token revoked.", "MessageResponse"),
               "401" => response("Authentication required.", "ErrorResponse")
             }
           }
@@ -489,11 +473,6 @@ defmodule GodsWheelWeb.OpenApiController do
       },
       components: %{
         securitySchemes: %{
-          RefreshCookie: %{
-            type: "apiKey",
-            in: "cookie",
-            name: "godswheel_refresh"
-          },
           BearerAuth: %{
             type: "http",
             scheme: "bearer",
@@ -788,30 +767,9 @@ defmodule GodsWheelWeb.OpenApiController do
                       user: ref_schema("PublicUser"),
                       accessToken: string_schema("Signed JWT access token"),
                       tokenType: %{type: "string", enum: ["Bearer"]},
-                      expiresIn: %{
-                        type: "integer",
-                        description: "Access token lifetime in seconds"
-                      },
-                      expiresAt: %{type: "string", format: "date-time"}
+                      issuedAt: %{type: "string", format: "date-time"}
                     },
-                    ["user", "accessToken", "tokenType", "expiresIn", "expiresAt"]
-                  )
-              },
-              ["success", "data"]
-            ),
-          RefreshResponse:
-            object_schema(
-              %{
-                success: %{type: "boolean", enum: [true]},
-                data:
-                  object_schema(
-                    %{
-                      accessToken: string_schema("New signed JWT access token"),
-                      tokenType: %{type: "string", enum: ["Bearer"]},
-                      expiresIn: %{type: "integer"},
-                      expiresAt: %{type: "string", format: "date-time"}
-                    },
-                    ["accessToken", "tokenType", "expiresIn", "expiresAt"]
+                    ["user", "accessToken", "tokenType", "issuedAt"]
                   )
               },
               ["success", "data"]

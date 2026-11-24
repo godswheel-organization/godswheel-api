@@ -4,9 +4,6 @@ defmodule GodsWheelWeb.AuthController do
   alias GodsWheel.Accounts
   alias GodsWheelWeb.{JWT, Response}
 
-  @refresh_cookie "godswheel_refresh"
-  @refresh_cookie_path "/api/v1/auth/refresh"
-
   def signup(conn, %{"user" => attrs}), do: signup(conn, attrs)
 
   def signup(conn, attrs) when is_map(attrs) do
@@ -195,49 +192,16 @@ defmodule GodsWheelWeb.AuthController do
     )
   end
 
-  def refresh(conn, _params) do
-    conn = fetch_cookies(conn)
-
-    case conn.cookies[@refresh_cookie] do
-      token when is_binary(token) ->
-        case Accounts.rotate_user_session(token) do
-          {:ok, {user, session, new_refresh_token}} ->
-            {:ok, access_token, claims} = JWT.sign(user, session.id)
-
-            conn
-            |> put_refresh_cookie(new_refresh_token)
-            |> json(
-              Response.success(%{
-                access_token: access_token,
-                token_type: "Bearer",
-                expires_in: JWT.ttl_seconds(),
-                expires_at: DateTime.from_unix!(claims["exp"], :second) |> DateTime.to_iso8601()
-              })
-            )
-
-          {:error, _reason} ->
-            session_expired(conn)
-        end
-
-      _ ->
-        session_expired(conn)
-    end
-  end
-
   def logout(conn, _params) do
     :ok = Accounts.revoke_user_session(conn.assigns.current_session_id)
 
-    conn
-    |> clear_refresh_cookie()
-    |> json(Response.success(%{message: "Logged out successfully."}))
+    json(conn, Response.success(%{message: "Logged out successfully."}))
   end
 
   def logout_all(conn, _params) do
     :ok = Accounts.revoke_all_user_sessions(conn.assigns.current_user.id)
 
-    conn
-    |> clear_refresh_cookie()
-    |> json(Response.success(%{message: "All sessions have been logged out."}))
+    json(conn, Response.success(%{message: "All sessions have been logged out."}))
   end
 
   def resend_verification(conn, %{"email" => email}) when is_binary(email) do
@@ -263,11 +227,11 @@ defmodule GodsWheelWeb.AuthController do
   end
 
   defp issue_session(conn, user) do
-    with {:ok, session, refresh_token} <- Accounts.create_user_session(user),
-         {:ok, access_token, claims} <- JWT.sign(user, session.id) do
-      conn
-      |> put_refresh_cookie(refresh_token)
-      |> render(:session, user: user, token: access_token, claims: claims)
+    session_id = Ecto.UUID.generate()
+
+    with {:ok, access_token, claims} <- JWT.sign(user, session_id),
+         {:ok, _session} <- Accounts.create_user_session(user, session_id, access_token) do
+      render(conn, :session, user: user, token: access_token, claims: claims)
     else
       {:error, _reason} ->
         Response.send_error(
@@ -277,35 +241,6 @@ defmodule GodsWheelWeb.AuthController do
           "Unable to create authenticated session."
         )
     end
-  end
-
-  defp session_expired(conn) do
-    conn
-    |> clear_refresh_cookie()
-    |> Response.send_error(
-      :unauthorized,
-      "session_expired",
-      "The session is invalid or expired. Please log in again."
-    )
-  end
-
-  defp put_refresh_cookie(conn, token) do
-    put_resp_cookie(conn, @refresh_cookie, token,
-      http_only: true,
-      secure: Application.get_env(:godswheel, :refresh_cookie_secure, false),
-      same_site: Application.get_env(:godswheel, :refresh_cookie_same_site, "Lax"),
-      path: @refresh_cookie_path,
-      max_age: Application.get_env(:godswheel, :session_idle_ttl_seconds, 2_592_000)
-    )
-  end
-
-  defp clear_refresh_cookie(conn) do
-    delete_resp_cookie(conn, @refresh_cookie,
-      http_only: true,
-      secure: Application.get_env(:godswheel, :refresh_cookie_secure, false),
-      same_site: Application.get_env(:godswheel, :refresh_cookie_same_site, "Lax"),
-      path: @refresh_cookie_path
-    )
   end
 
   defp public_user(user) do

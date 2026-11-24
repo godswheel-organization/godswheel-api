@@ -54,16 +54,6 @@ end
 config :godswheel,
   frontend_url: frontend_url,
   frontend_origins: frontend_origins,
-  refresh_cookie_secure: config_env() in [:prod, :staging],
-  refresh_cookie_same_site:
-    System.get_env(
-      "REFRESH_COOKIE_SAME_SITE",
-      if(config_env() in [:prod, :staging], do: "None", else: "Lax")
-    ),
-  session_idle_ttl_seconds:
-    String.to_integer(System.get_env("SESSION_IDLE_TTL_SECONDS", "2592000")),
-  session_absolute_ttl_seconds:
-    String.to_integer(System.get_env("SESSION_ABSOLUTE_TTL_SECONDS", "7776000")),
   verification_resend_cooldown_seconds:
     String.to_integer(System.get_env("VERIFICATION_RESEND_COOLDOWN_SECONDS", "60")),
   password_reset_token_ttl_seconds: password_reset_token_ttl_seconds
@@ -218,7 +208,7 @@ config :godswheel, :storage_adapter, GodsWheel.Storage.Tigris
 
 config :godswheel,
   sermon_progress_flush_interval_ms:
-    String.to_integer(System.get_env("SERMON_PROGRESS_FLUSH_INTERVAL_MS", "300_000"))
+    String.to_integer(System.get_env("SERMON_PROGRESS_FLUSH_INTERVAL_MS", "300000"))
 
 config :godswheel, :tigris,
   bucket: System.get_env("TIGRIS_BUCKET"),

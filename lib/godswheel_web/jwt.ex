@@ -2,7 +2,6 @@ defmodule GodsWheelWeb.JWT do
   @moduledoc false
 
   @issuer "godswheel-api"
-  @ttl_seconds 3_600
 
   def sign(user, session_id) do
     now = System.system_time(:second)
@@ -11,8 +10,7 @@ defmodule GodsWheelWeb.JWT do
       "iss" => @issuer,
       "sub" => user.id,
       "sid" => session_id,
-      "iat" => now,
-      "exp" => now + @ttl_seconds
+      "iat" => now
     }
 
     with {:ok, header} <- encode_segment(%{"alg" => "HS256", "typ" => "JWT"}),
@@ -40,8 +38,7 @@ defmodule GodsWheelWeb.JWT do
          true <- claims["iss"] == @issuer,
          true <- is_binary(claims["sub"]),
          true <- is_binary(claims["sid"]),
-         true <- is_integer(claims["exp"]),
-         true <- claims["exp"] > System.system_time(:second) do
+         true <- is_integer(claims["iat"]) do
       {:ok, claims}
     else
       _ -> {:error, :invalid_token}
@@ -49,8 +46,6 @@ defmodule GodsWheelWeb.JWT do
   end
 
   def verify(_token), do: {:error, :invalid_token}
-
-  def ttl_seconds, do: @ttl_seconds
 
   defp encode_segment(value) do
     value

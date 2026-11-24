@@ -5,10 +5,8 @@ defmodule GodsWheel.Accounts.UserSession do
   @foreign_key_type :binary_id
 
   schema "user_sessions" do
-    field :refresh_token_hash, :string
-    field :expires_at, :utc_datetime_usec
-    field :absolute_expires_at, :utc_datetime_usec
-    field :last_used_at, :utc_datetime_usec
+    field :token_hash, :string
+    field :is_valid, :boolean, default: true
     field :revoked_at, :utc_datetime_usec
 
     belongs_to :user, GodsWheel.Accounts.User

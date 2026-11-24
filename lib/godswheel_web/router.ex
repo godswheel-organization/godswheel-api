@@ -9,10 +9,6 @@ defmodule GodsWheelWeb.Router do
     plug GodsWheelWeb.Plugs.Authenticate
   end
 
-  pipeline :same_origin_api do
-    plug GodsWheelWeb.Plugs.VerifyOrigin
-  end
-
   pipeline :dashboard do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -60,11 +56,6 @@ defmodule GodsWheelWeb.Router do
     get "/sermon-bookmarks", Sermon.SermonUserController, :bookmarks
   end
 
-  scope "/api/v1/auth", GodsWheelWeb do
-    pipe_through [:api, :same_origin_api]
-
-    post "/refresh", AuthController, :refresh
-  end
 
   get "/api/v1/openapi.json", GodsWheelWeb.OpenApiController, :spec
   get "/swagger", GodsWheelWeb.OpenApiController, :swagger_ui

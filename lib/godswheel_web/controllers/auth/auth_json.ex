@@ -20,8 +20,7 @@ defmodule GodsWheelWeb.AuthJSON do
       },
       access_token: token,
       token_type: "Bearer",
-      expires_in: GodsWheelWeb.JWT.ttl_seconds(),
-      expires_at: DateTime.from_unix!(claims["exp"], :second) |> DateTime.to_iso8601()
+      issued_at: DateTime.from_unix!(claims["iat"], :second) |> DateTime.to_iso8601()
     })
   end
 end
