@@ -121,8 +121,20 @@ if config_env() in [:prod, :staging] do
 
   maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
 
+  ca_cert_path = "/tmp/godswheel-ca.crt"
+
+  ca_cert =
+    System.fetch_env!("DATABASE_CA_CERT_BASE64")
+    |> Base.decode64!()
+
+  File.write!(ca_cert_path, ca_cert)
+  File.chmod!(ca_cert_path, 0o644)
+
   config :godswheel, GodsWheel.Repo,
-    ssl: true,
+    ssl: [
+      verify: :verify_peer,
+      cacertfile: ca_cert_path
+    ],
     url: database_url,
     idle_interval: :timer.hours(24),
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
