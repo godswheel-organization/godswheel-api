@@ -1,0 +1,122 @@
+name: Database VM Metrics
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  collect-metrics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install OCI CLI
+        run: |
+          python -m venv "$RUNNER_TEMP/oci-cli"
+          "$RUNNER_TEMP/oci-cli/bin/pip" install oci-cli
+          echo "$RUNNER_TEMP/oci-cli/bin" >> "$GITHUB_PATH"
+
+      - name: Configure OCI CLI
+        env:
+          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+        run: |
+          mkdir -p "$HOME/.oci"
+          printf '%s\n' "$OCI_PRIVATE_KEY" > "$HOME/.oci/oci_api_key.pem"
+          chmod 600 "$HOME/.oci/oci_api_key.pem"
+          cat > "$HOME/.oci/config" <<EOF_CONFIG
+          [DEFAULT]
+          user=$OCI_USER_OCID
+          fingerprint=$OCI_FINGERPRINT
+          tenancy=$OCI_TENANCY_OCID
+          region=$OCI_REGION
+          key_file=$HOME/.oci/oci_api_key.pem
+          EOF_CONFIG
+          chmod 600 "$HOME/.oci/config"
+
+      - name: Submit metrics collection command
+        id: submit
+        env:
+          OCI_COMPARTMENT_OCID: ${{ secrets.OCI_COMPARTMENT_OCID }}
+          OCI_INSTANCE_OCID: ${{ secrets.OCI_INSTANCE_OCID }}
+        run: |
+          jq -n --rawfile script .github/scripts/collect-db-vm-metrics.sh \
+            '{source:{sourceType:"TEXT",text:$script},output:{outputType:"TEXT"}}' \
+            > /tmp/command-content.json
+          jq -n --arg instance_id "$OCI_INSTANCE_OCID" \
+            '{instanceId:$instance_id}' > /tmp/command-target.json
+
+          command_id=$(oci instance-agent command create \
+            --compartment-id "$OCI_COMPARTMENT_OCID" \
+            --content file:///tmp/command-content.json \
+            --target file:///tmp/command-target.json \
+            --timeout-in-seconds 120 \
+            --display-name "Godswheel database VM metrics" \
+            --query 'data.id' --raw-output)
+
+          if [ -z "$command_id" ] || [ "$command_id" = "null" ]; then
+            echo "OCI did not return a command ID" >&2
+            exit 1
+          fi
+
+          echo "command_id=$command_id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for metrics and retrieve output
+        id: result
+        env:
+          OCI_INSTANCE_OCID: ${{ secrets.OCI_INSTANCE_OCID }}
+          COMMAND_ID: ${{ steps.submit.outputs.command_id }}
+        run: |
+          for attempt in $(seq 1 36); do
+            response=$(oci instance-agent command-execution get \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$OCI_INSTANCE_OCID")
+            state=$(jq -r '.data.lifecycleState // "UNKNOWN"' <<< "$response")
+
+            case "$state" in
+              SUCCEEDED)
+                exit_code=$(jq -r '.data.content.exitCode // 1' <<< "$response")
+                metrics=$(jq -r '.data.content.text // "No command output returned"' <<< "$response")
+                printf '%s\n' "$metrics" > /tmp/database-vm-metrics.txt
+                echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+                if [ "$exit_code" -ne 0 ]; then
+                  echo "Metrics command exited with code $exit_code" >&2
+                  exit 1
+                fi
+                exit 0
+                ;;
+              FAILED|TIMED_OUT|CANCELED)
+                jq -r '.data.content.message // "OCI Run Command failed"' <<< "$response" >&2
+                exit 1
+                ;;
+              *)
+                sleep 10
+                ;;
+            esac
+          done
+
+          echo "Timed out waiting for OCI Run Command execution" >&2
+          exit 1
+
+      - name: Publish metrics to job summary
+        if: success()
+        run: |
+          {
+            echo '## Godswheel Database VM Metrics'
+            echo
+            echo "Collected at: $(date --utc '+%Y-%m-%d %H:%M:%S UTC')"
+            echo
+            echo '```text'
+            cat /tmp/database-vm-metrics.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
