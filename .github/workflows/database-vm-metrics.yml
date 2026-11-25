@@ -120,3 +120,33 @@ jobs:
             cat /tmp/database-vm-metrics.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Send metrics to Slack
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          metrics=$(cat /tmp/database-vm-metrics.txt)
+          collected_at=$(date --utc '+%Y-%m-%d %H:%M:%S UTC')
+          message=$(printf '*Godswheel Database VM Metrics*\nCollected at: %s\n```\n%s\n```' "$collected_at" "$metrics")
+          jq -n --arg text "$message" '{text: $text}' > /tmp/slack-payload.json
+          curl --fail --silent --show-error \
+            --max-time 20 \
+            -H 'Content-type: application/json' \
+            --data-binary @/tmp/slack-payload.json \
+            "$SLACK_WEBHOOK_URL"
+
+      - name: Notify Slack when metrics workflow fails
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          message=$(printf ':warning: *Godswheel database metrics workflow failed.*\n<%s|View the failed GitHub Actions run>' "$WORKFLOW_URL")
+          jq -n --arg text "$message" '{text: $text}' > /tmp/slack-payload.json
+          curl --fail --silent --show-error \
+            --max-time 20 \
+            -H 'Content-type: application/json' \
+            --data-binary @/tmp/slack-payload.json \
+            "$SLACK_WEBHOOK_URL"
+
