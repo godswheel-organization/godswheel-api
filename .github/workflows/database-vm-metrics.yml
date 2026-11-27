@@ -44,12 +44,51 @@ jobs:
           EOF_CONFIG
           chmod 600 "$HOME/.oci/config"
 
+          echo "Checking OCI configuration..."
+
+          if [ -z "$OCI_USER_OCID" ] || [ -z "$OCI_TENANCY_OCID" ] || \
+             [ -z "$OCI_FINGERPRINT" ] || [ -z "$OCI_REGION" ] || \
+             [ -z "$OCI_PRIVATE_KEY" ]; then
+            echo "::error::One or more required OCI authentication secrets are empty or unavailable"
+            exit 1
+          fi
+
+          if [ "$OCI_FINGERPRINT" != "a7:75:08:3b:3e:a3:59:f2:e2:61:e8:a5:13:1e:f9:39" ]; then
+            echo "::error::OCI fingerprint does not match the API key registered for Godswheel Automation"
+            exit 1
+          fi
+
+          if [ "$OCI_REGION" != "af-casablanca-1" ]; then
+            echo "::error::OCI region must be af-casablanca-1"
+            exit 1
+          fi
+
+          echo "OCI fingerprint: MATCH"
+          echo "OCI region: MATCH"
+
+          echo "Checking configured OCI user..."
+          if user_response=$(oci iam user get \
+            --user-id "$OCI_USER_OCID" \
+            --query 'data.{id:id,name:name}' \
+            --output json 2>/tmp/oci-user-check-error.txt); then
+            echo "OCI user lookup succeeded:"
+            printf '%s\n' "$user_response"
+          else
+            echo "::warning::OCI user lookup could not be completed. This may be due to IAM read permissions or the tenancy home-region configuration; it does not by itself prove the API credentials are invalid."
+            sed -n '1,12p' /tmp/oci-user-check-error.txt
+          fi
+
       - name: Submit metrics collection command
         id: submit
         env:
           OCI_COMPARTMENT_OCID: ${{ secrets.OCI_COMPARTMENT_OCID }}
           OCI_INSTANCE_OCID: ${{ secrets.OCI_INSTANCE_OCID }}
         run: |
+          if [ -z "$OCI_COMPARTMENT_OCID" ] || [ -z "$OCI_INSTANCE_OCID" ]; then
+            echo "::error::OCI_COMPARTMENT_OCID or OCI_INSTANCE_OCID is empty or unavailable"
+            exit 1
+          fi
+
           jq -n --rawfile script .github/scripts/collect-db-vm-metrics.sh \
             '{source:{sourceType:"TEXT",text:$script},output:{outputType:"TEXT"}}' \
             > /tmp/command-content.json
