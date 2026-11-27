@@ -3,7 +3,7 @@ name: Database VM Metrics
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: "0 */6 * * *"
 
 permissions:
   contents: read
@@ -77,6 +77,15 @@ jobs:
             echo "::warning::OCI user lookup could not be completed. This may be due to IAM read permissions or the tenancy home-region configuration; it does not by itself prove the API credentials are invalid."
             sed -n '1,12p' /tmp/oci-user-check-error.txt
           fi
+
+      - name: Verify OCI instance access
+        env:
+          OCI_INSTANCE_OCID: ${{ secrets.OCI_INSTANCE_OCID }}
+        run: |
+          oci compute instance get \
+            --instance-id "$OCI_INSTANCE_OCID" \
+            --query 'data.{id:id,compartmentId:"compartment-id",state:"lifecycle-state"}' \
+            --output json
 
       - name: Submit metrics collection command
         id: submit
@@ -188,4 +197,3 @@ jobs:
             -H 'Content-type: application/json' \
             --data-binary @/tmp/slack-payload.json \
             "$SLACK_WEBHOOK_URL"
-
