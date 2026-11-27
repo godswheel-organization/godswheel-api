@@ -85,7 +85,8 @@ jobs:
           oci compute instance get \
             --instance-id "$OCI_INSTANCE_OCID" \
             --query 'data.{id:id,compartmentId:"compartment-id",state:"lifecycle-state"}' \
-            --output json
+            --output json \
+            --debug
 
       - name: Submit metrics collection command
         id: submit
