@@ -85,8 +85,7 @@ jobs:
           oci compute instance get \
             --instance-id "$OCI_INSTANCE_OCID" \
             --query 'data.{id:id,compartmentId:"compartment-id",state:"lifecycle-state"}' \
-            --output json \
-            --debug
+            --output json
 
       - name: Submit metrics collection command
         id: submit
@@ -127,10 +126,25 @@ jobs:
           COMMAND_ID: ${{ steps.submit.outputs.command_id }}
         run: |
           for attempt in $(seq 1 36); do
-            response=$(oci instance-agent command-execution get \
+            echo "Checking command execution (attempt $attempt/36)..."
+
+            if ! response=$(oci instance-agent command-execution get \
               --command-id "$COMMAND_ID" \
-              --instance-id "$OCI_INSTANCE_OCID")
+              --instance-id "$OCI_INSTANCE_OCID" \
+              2>/tmp/oci-command-error.log); then
+
+              if grep -Eq '"status"[[:space:]]*:[[:space:]]*404' /tmp/oci-command-error.log; then
+                echo "Execution not available yet. Retrying in 10 seconds..."
+                sleep 10
+                continue
+              fi
+
+              cat /tmp/oci-command-error.log >&2
+              exit 1
+            fi
+
             state=$(jq -r '.data.lifecycleState // "UNKNOWN"' <<< "$response")
+            echo "Command execution state: $state"
 
             case "$state" in
               SUCCEEDED)
